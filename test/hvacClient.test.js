@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { AliasStore } from "../src/aliasStore.js";
 import { buildControlCommand, normalizeUnit, parseDeviceJson } from "../src/hvacClient.js";
 
 const rawUnit = {
@@ -60,4 +64,23 @@ test("parses raw HTTP zero point nine style JSON", () => {
 
 test("parses JSON even if a gateway returns headers", () => {
   assert.deepEqual(parseDeviceJson('HTTP/1.0 200 OK\r\n\r\n{"err":0}'), { err: 0 });
+});
+
+test("stores and applies local unit aliases", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-alias-"));
+  try {
+    const store = new AliasStore(dir);
+    await store.set(1, "主卧");
+
+    const units = await store.apply([normalizeUnit(rawUnit)]);
+    assert.equal(units[0].alias, "主卧");
+    assert.equal(units[0].name, "主卧");
+
+    await store.set(1, "");
+    const cleared = await store.apply([normalizeUnit(rawUnit)]);
+    assert.equal(cleared[0].alias, "");
+    assert.equal(cleared[0].name, "客厅");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

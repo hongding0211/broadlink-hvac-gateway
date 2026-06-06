@@ -43,6 +43,11 @@ button {
   font: inherit;
 }
 
+input,
+select {
+  font: inherit;
+}
+
 h1,
 h2,
 p {
@@ -113,7 +118,7 @@ h1 {
 }
 
 .hidden {
-  display: none;
+  display: none !important;
 }
 
 .unit-grid {
@@ -269,28 +274,202 @@ h1 {
   gap: 16px;
 }
 
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .detail-panel h2 {
   margin-top: 4px;
   font-size: 30px;
   line-height: 1.08;
 }
 
-.panel-placeholder {
+.text-button {
+  margin-top: 7px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.45);
+  color: rgba(16, 32, 51, 0.72);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.alias-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.alias-form input,
+.alias-form button,
+.control-row select {
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.48);
+  color: var(--text);
+}
+
+.alias-form input {
+  min-width: 0;
+  padding: 0 13px;
+}
+
+.alias-form button {
+  padding: 0 15px;
+  font-weight: 760;
+  cursor: pointer;
+}
+
+.status-panel {
   margin-top: 22px;
-  padding: 18px;
-  border-radius: 20px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.status-panel > div,
+.timer-placeholder {
+  padding: 14px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.42);
 }
 
-.panel-placeholder strong {
+.status-panel span,
+.timer-placeholder span,
+.control-row > span,
+.temperature-control span {
   display: block;
-  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 680;
+}
+
+.status-panel strong {
+  display: block;
+  margin-top: 6px;
+  overflow-wrap: anywhere;
   font-size: 18px;
 }
 
-.panel-placeholder p {
-  color: var(--muted);
-  line-height: 1.5;
+.temperature-control {
+  display: grid;
+  grid-template-columns: 56px 1fr 56px;
+  align-items: center;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 18px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.temperature-control > div {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+}
+
+.temperature-control strong {
+  font-size: 54px;
+  line-height: 0.95;
+}
+
+.step-button {
+  display: inline-grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.5);
+  color: var(--text);
+  font-size: 30px;
+  cursor: pointer;
+}
+
+.control-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.control-row {
+  display: grid;
+  grid-template-columns: 1fr minmax(132px, auto);
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 12px 10px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.control-row select {
+  width: 100%;
+  padding: 0 36px 0 12px;
+}
+
+.switch-row {
+  grid-template-columns: 1fr auto;
+  cursor: pointer;
+}
+
+.switch-row input {
+  position: absolute;
+  opacity: 0;
+}
+
+.switch-row i {
+  position: relative;
+  display: block;
+  width: 58px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(16, 32, 51, 0.24);
+  transition: background 0.16s ease;
+}
+
+.switch-row i::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 3px 9px rgba(18, 35, 50, 0.2);
+  transition: transform 0.16s ease;
+}
+
+.switch-row input:checked + i {
+  background: var(--running);
+}
+
+.switch-row input:checked + i::after {
+  transform: translateX(24px);
+}
+
+.timer-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+}
+
+.timer-placeholder strong {
+  color: rgba(16, 32, 51, 0.48);
+  font-size: 15px;
+}
+
+.detail-panel[data-busy="true"] {
+  pointer-events: none;
+  opacity: 0.78;
 }
 
 @media (min-width: 680px) {
@@ -322,5 +501,22 @@ h1 {
 
   .room-temp {
     font-size: 42px;
+  }
+
+  .detail-panel {
+    max-height: calc(100dvh - 24px);
+    overflow: auto;
+  }
+
+  .status-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .control-row {
+    grid-template-columns: 1fr;
+  }
+
+  .switch-row {
+    grid-template-columns: 1fr auto;
   }
 }

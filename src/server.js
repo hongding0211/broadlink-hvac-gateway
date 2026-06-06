@@ -4,11 +4,13 @@ import { createReadStream } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
+import { AliasStore } from "./aliasStore.js";
 import { fans, HvacClient, modes } from "./hvacClient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.resolve(__dirname, "../public");
 const client = new HvacClient(config);
+const aliases = new AliasStore();
 
 const server = http.createServer(async (req, res) => {
   try {
@@ -23,13 +25,20 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === "/api/units" && req.method === "GET") {
-      return sendJson(res, 200, { units: await client.readUnits() });
+      return sendJson(res, 200, { units: await aliases.apply(await client.readUnits()) });
     }
 
     const unitMatch = url.pathname.match(/^\/api\/units\/(\d+)$/);
     if (unitMatch && req.method === "PATCH") {
       const body = await readJsonBody(req);
       const result = await client.updateUnit(Number(unitMatch[1]), body);
+      return sendJson(res, 200, result);
+    }
+
+    const aliasMatch = url.pathname.match(/^\/api\/units\/(\d+)\/alias$/);
+    if (aliasMatch && req.method === "PUT") {
+      const body = await readJsonBody(req);
+      const result = await aliases.set(Number(aliasMatch[1]), body.alias);
       return sendJson(res, 200, result);
     }
 

@@ -3,8 +3,30 @@ const state = {
   modes: [],
   fans: [],
   loading: false,
-  selectedUnit: null
+  selectedUnit: null,
+  panelBusy: false
 };
+
+const flow1Options = [
+  { value: 0, label: "保持" },
+  { value: 1, label: "位置 1" },
+  { value: 2, label: "位置 2" },
+  { value: 3, label: "位置 3" },
+  { value: 4, label: "位置 4" },
+  { value: 5, label: "位置 5" },
+  { value: 6, label: "位置 6" },
+  { value: 7, label: "位置 7" }
+];
+
+const flow2Options = [
+  { value: 0, label: "保持" },
+  { value: 1, label: "位置 1" },
+  { value: 2, label: "位置 2" },
+  { value: 3, label: "位置 3" },
+  { value: 4, label: "位置 4" },
+  { value: 5, label: "位置 5" },
+  { value: 6, label: "位置 6" }
+];
 
 const els = {
   units: document.querySelector("#units"),
@@ -14,14 +36,35 @@ const els = {
   panelBackdrop: document.querySelector("#panelBackdrop"),
   detailPanel: document.querySelector("#detailPanel"),
   closePanel: document.querySelector("#closePanel"),
+  editAlias: document.querySelector("#editAlias"),
+  aliasForm: document.querySelector("#aliasForm"),
+  aliasInput: document.querySelector("#aliasInput"),
   panelTitle: document.querySelector("#panelTitle"),
   panelState: document.querySelector("#panelState"),
-  panelMeta: document.querySelector("#panelMeta")
+  panelRoomTemp: document.querySelector("#panelRoomTemp"),
+  panelSetTemp: document.querySelector("#panelSetTemp"),
+  controlTemp: document.querySelector("#controlTemp"),
+  tempDown: document.querySelector("#tempDown"),
+  tempUp: document.querySelector("#tempUp"),
+  controlPower: document.querySelector("#controlPower"),
+  controlMode: document.querySelector("#controlMode"),
+  controlFan: document.querySelector("#controlFan"),
+  controlFlow1: document.querySelector("#controlFlow1"),
+  controlFlow2: document.querySelector("#controlFlow2")
 };
 
 els.refreshButton.addEventListener("click", () => loadUnits());
 els.closePanel.addEventListener("click", closePanel);
 els.panelBackdrop.addEventListener("click", closePanel);
+els.editAlias.addEventListener("click", toggleAliasForm);
+els.aliasForm.addEventListener("submit", saveAlias);
+els.tempDown.addEventListener("click", () => updateSelected({ tempSet: Math.max(16, state.selectedUnit.tempSet - 1) }));
+els.tempUp.addEventListener("click", () => updateSelected({ tempSet: Math.min(32, state.selectedUnit.tempSet + 1) }));
+els.controlPower.addEventListener("change", () => updateSelected({ on: els.controlPower.checked ? 1 : 0 }));
+els.controlMode.addEventListener("change", () => updateSelected({ mode: Number(els.controlMode.value) }));
+els.controlFan.addEventListener("change", () => updateSelected({ fan: Number(els.controlFan.value) }));
+els.controlFlow1.addEventListener("change", () => updateSelected({ FlowDirection1: Number(els.controlFlow1.value) }));
+els.controlFlow2.addEventListener("change", () => updateSelected({ FlowDirection2: Number(els.controlFlow2.value) }));
 window.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePanel();
 });
@@ -44,6 +87,7 @@ async function loadUnits() {
   try {
     const payload = await api("/api/units");
     state.units = payload.units;
+    syncSelectedUnit();
     hideMessage();
     render();
   } catch (error) {
@@ -71,7 +115,7 @@ function render() {
 
 function renderUnit(unit) {
   const node = els.template.content.firstElementChild.cloneNode(true);
-  const displayName = `空调 ${unit.idx + 1}`;
+  const displayName = getDisplayName(unit);
   const stateName = getStateName(unit);
 
   node.dataset.idx = unit.idx;
@@ -89,12 +133,14 @@ function renderUnit(unit) {
 
 function openPanel(unit, displayName, stateName) {
   state.selectedUnit = unit;
+  els.aliasForm.classList.add("hidden");
   els.panelTitle.textContent = displayName;
-  els.panelState.textContent = stateName;
-  els.panelMeta.textContent =
-    unit.alarm !== 0
-      ? `告警代码 ${unit.alarm}`
-      : `当前 ${unit.tempIn}°，设定 ${unit.tempSet}°，${unit.modeLabel}，${unit.fanLabel}`;
+  els.aliasInput.value = unit.alias || "";
+  fillSelect(els.controlMode, state.modes, unit.mode);
+  fillSelect(els.controlFan, state.fans, unit.fan);
+  fillSelect(els.controlFlow1, flow1Options, unit.FlowDirection1);
+  fillSelect(els.controlFlow2, flow2Options, unit.FlowDirection2);
+  renderPanelState(unit, stateName);
   els.panelBackdrop.classList.remove("hidden");
   els.detailPanel.classList.remove("hidden");
 }
@@ -103,6 +149,81 @@ function closePanel() {
   state.selectedUnit = null;
   els.panelBackdrop.classList.add("hidden");
   els.detailPanel.classList.add("hidden");
+}
+
+function renderPanelState(unit, stateName = getStateName(unit)) {
+  els.panelTitle.textContent = getDisplayName(unit);
+  els.panelState.textContent = stateName;
+  els.panelRoomTemp.textContent = `${unit.tempIn}°`;
+  els.panelSetTemp.textContent = `${unit.tempSet}°`;
+  els.controlTemp.textContent = `${unit.tempSet}°`;
+  els.controlPower.checked = unit.on === 1;
+  els.controlMode.value = String(unit.mode);
+  els.controlFan.value = String(unit.fan);
+  els.controlFlow1.value = String(unit.FlowDirection1);
+  els.controlFlow2.value = String(unit.FlowDirection2);
+}
+
+async function updateSelected(patch) {
+  if (!state.selectedUnit || state.panelBusy) return;
+  setPanelBusy(true);
+
+  try {
+    await api(`/api/units/${state.selectedUnit.idx}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(patch)
+    });
+    await loadUnits();
+  } catch (error) {
+    showMessage(error.message);
+    await loadUnits();
+  } finally {
+    setPanelBusy(false);
+  }
+}
+
+function toggleAliasForm() {
+  if (!state.selectedUnit) return;
+  els.aliasInput.value = state.selectedUnit.alias || "";
+  els.aliasForm.classList.toggle("hidden");
+  if (!els.aliasForm.classList.contains("hidden")) els.aliasInput.focus();
+}
+
+async function saveAlias(event) {
+  event.preventDefault();
+  if (!state.selectedUnit) return;
+
+  const alias = els.aliasInput.value.trim();
+  setPanelBusy(true);
+  try {
+    await api(`/api/units/${state.selectedUnit.idx}/alias`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ alias })
+    });
+    els.aliasForm.classList.add("hidden");
+    await loadUnits();
+  } catch (error) {
+    showMessage(error.message);
+  } finally {
+    setPanelBusy(false);
+  }
+}
+
+function syncSelectedUnit() {
+  if (!state.selectedUnit) return;
+
+  const next = state.units.find((unit) => unit.idx === state.selectedUnit.idx);
+  if (!next) {
+    closePanel();
+    return;
+  }
+
+  state.selectedUnit = next;
+  if (!els.detailPanel.classList.contains("hidden")) {
+    renderPanelState(next);
+  }
 }
 
 function getCardState(unit) {
@@ -117,6 +238,22 @@ function getStateName(unit) {
   return "已关闭";
 }
 
+function getDisplayName(unit) {
+  return unit.alias || `空调 ${unit.idx + 1}`;
+}
+
+function fillSelect(select, options, value) {
+  select.replaceChildren(
+    ...options.map((option) => {
+      const item = document.createElement("option");
+      item.value = String(option.value);
+      item.textContent = option.label;
+      item.selected = option.value === value;
+      return item;
+    })
+  );
+}
+
 async function api(path, options) {
   const response = await fetch(path, options);
   const payload = await response.json().catch(() => ({}));
@@ -128,6 +265,24 @@ function setLoading(isLoading) {
   state.loading = isLoading;
   els.refreshButton.disabled = isLoading;
   els.refreshButton.style.opacity = isLoading ? "0.5" : "1";
+}
+
+function setPanelBusy(isBusy) {
+  state.panelBusy = isBusy;
+  els.detailPanel.dataset.busy = isBusy ? "true" : "false";
+  for (const control of [
+    els.tempDown,
+    els.tempUp,
+    els.controlPower,
+    els.controlMode,
+    els.controlFan,
+    els.controlFlow1,
+    els.controlFlow2,
+    els.editAlias,
+    els.aliasInput
+  ]) {
+    control.disabled = isBusy;
+  }
 }
 
 function showMessage(message) {

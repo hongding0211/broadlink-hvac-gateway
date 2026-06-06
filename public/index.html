@@ -47,15 +47,72 @@
       <div class="detail-panel__head">
         <div>
           <p class="eyebrow">Air Conditioner</p>
-          <h2 id="panelTitle">空调</h2>
+          <div class="panel-title-row">
+            <h2 id="panelTitle">空调</h2>
+            <button class="text-button" id="editAlias" type="button">编辑</button>
+          </div>
         </div>
         <button class="icon-button" id="closePanel" type="button" aria-label="关闭">
           <span aria-hidden="true">×</span>
         </button>
       </div>
-      <div class="panel-placeholder">
-        <strong id="panelState"></strong>
-        <p id="panelMeta"></p>
+
+      <form id="aliasForm" class="alias-form hidden">
+        <input id="aliasInput" maxlength="18" autocomplete="off" placeholder="空调昵称" />
+        <button type="submit">保存</button>
+      </form>
+
+      <div class="status-panel">
+        <div>
+          <span>状态</span>
+          <strong id="panelState"></strong>
+        </div>
+        <div>
+          <span>当前温度</span>
+          <strong id="panelRoomTemp"></strong>
+        </div>
+        <div>
+          <span>设定温度</span>
+          <strong id="panelSetTemp"></strong>
+        </div>
+      </div>
+
+      <section class="temperature-control" aria-label="温度控制">
+        <button class="step-button" id="tempDown" type="button" aria-label="降低温度">−</button>
+        <div>
+          <strong id="controlTemp"></strong>
+          <span>目标温度</span>
+        </div>
+        <button class="step-button" id="tempUp" type="button" aria-label="升高温度">+</button>
+      </section>
+
+      <div class="control-list">
+        <label class="control-row switch-row">
+          <span>开关</span>
+          <input id="controlPower" type="checkbox" />
+          <i aria-hidden="true"></i>
+        </label>
+        <label class="control-row">
+          <span>模式</span>
+          <select id="controlMode"></select>
+        </label>
+        <label class="control-row">
+          <span>风速</span>
+          <select id="controlFan"></select>
+        </label>
+        <label class="control-row">
+          <span>上下摆风</span>
+          <select id="controlFlow1"></select>
+        </label>
+        <label class="control-row">
+          <span>左右摆风</span>
+          <select id="controlFlow2"></select>
+        </label>
+      </div>
+
+      <div class="timer-placeholder">
+        <span>定时</span>
+        <strong>稍后添加</strong>
       </div>
     </aside>
 
