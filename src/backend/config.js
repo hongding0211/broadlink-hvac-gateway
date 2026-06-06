@@ -22,7 +22,7 @@ export const config = {
 };
 
 function loadDotEnv() {
-  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
   const envPath = path.join(root, ".env");
   if (!existsSync(envPath)) return;
 

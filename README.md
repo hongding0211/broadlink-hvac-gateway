@@ -2,9 +2,17 @@
 
 Local web controller for the BroadLink `BL-LAN-AC.GW1` central AC gateway.
 
+## Structure
+
+- `src/frontend/`: React, Vite, Tailwind UI
+- `src/backend/`: Express API and BroadLink gateway client
+- `dist/`: generated production frontend build
+
 ## Run Locally
 
 ```bash
+npm install
+npm run build
 HVAC_HOST=192.168.x.x npm start
 ```
 
@@ -13,6 +21,20 @@ Open:
 ```text
 http://localhost:3000
 ```
+
+For frontend development with Vite hot reload:
+
+```bash
+HVAC_HOST=192.168.x.x npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+The Vite dev server proxies `/api` to the Express server on port `3000`.
 
 ## Configuration
 
@@ -24,6 +46,15 @@ http://localhost:3000
 | `HVAC_PASSWORD` | empty | Gateway HTTP basic auth password |
 | `HVAC_TIMEOUT_MS` | `5000` | Device request timeout |
 | `PORT` | `3000` | Web UI/API port |
+
+## Build
+
+```bash
+npm run build
+npm start
+```
+
+The Express server serves the built React app from `dist/` in production.
 
 ## Docker
 

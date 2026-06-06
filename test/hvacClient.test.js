@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { AliasStore } from "../src/aliasStore.js";
-import { buildControlCommand, normalizeUnit, parseDeviceJson } from "../src/hvacClient.js";
+import { AliasStore } from "../src/backend/aliasStore.js";
+import { buildControlCommand, normalizeUnit, parseDeviceJson } from "../src/backend/hvacClient.js";
 
 const rawUnit = {
   idx: 1,
