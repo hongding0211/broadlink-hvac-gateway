@@ -5,24 +5,24 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 
 const MODE_LABELS = {
-  0: "自动",
-  1: "制冷",
-  2: "除湿",
-  3: "清爽",
-  4: "新风",
-  5: "自动除湿",
-  6: "贴心睡眠",
-  8: "制热",
-  9: "地暖",
-  10: "强热"
+  0: "Auto",
+  1: "Cooling",
+  2: "Dehumidify",
+  3: "Comfort Dry",
+  4: "Fresh Air",
+  5: "Auto Dehumidify",
+  6: "Sleep",
+  8: "Heating",
+  9: "Floor Heating",
+  10: "Strong Heating"
 };
 
 const FAN_LABELS = {
-  0: "自动",
-  1: "高风",
-  2: "中风",
-  4: "低风",
-  6: "微风"
+  0: "Auto",
+  1: "High",
+  2: "Medium",
+  4: "Low",
+  6: "Quiet"
 };
 
 export const modes = Object.entries(MODE_LABELS).map(([value, label]) => ({
@@ -169,15 +169,15 @@ export function normalizeUnit(unit) {
     idx: Number(unit.idx),
     oa: Number(unit.oa),
     ia: Number(unit.ia),
-    name: unit.nm || `内机 ${unit.idx}`,
+    name: unit.nm || `Indoor Unit ${unit.idx}`,
     on: Number(unit.on),
     mode: Number(unit.mode),
-    modeLabel: MODE_LABELS[Number(unit.mode)] || `模式 ${unit.mode}`,
+    modeLabel: MODE_LABELS[Number(unit.mode)] || `Mode ${unit.mode}`,
     alarm: Number(unit.alarm || 0),
     tempSet: Number(unit.tempSet),
     tempIn: Number(unit.tempIn),
     fan: Number(unit.fan),
-    fanLabel: FAN_LABELS[Number(unit.fan)] || `风速 ${unit.fan}`,
+    fanLabel: FAN_LABELS[Number(unit.fan)] || `Fan ${unit.fan}`,
     group: Number(unit.grp || 0),
     OnoffLock: Number(unit.OnoffLock || 0),
     tempLock: Number(unit.tempLock || 0),
@@ -232,10 +232,10 @@ function pickControlPatch(command) {
   return {
     on: command.on,
     mode: command.mode,
-    modeLabel: MODE_LABELS[command.mode] || `模式 ${command.mode}`,
+    modeLabel: MODE_LABELS[command.mode] || `Mode ${command.mode}`,
     tempSet: command.tempSet,
     fan: command.fan,
-    fanLabel: FAN_LABELS[command.fan] || `风速 ${command.fan}`,
+    fanLabel: FAN_LABELS[command.fan] || `Fan ${command.fan}`,
     FlowDirection1: command.FlowDirection1,
     FlowDirection2: command.FlowDirection2
   };

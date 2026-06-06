@@ -10,7 +10,7 @@ const rawUnit = {
   idx: 1,
   oa: 1,
   ia: 1,
-  nm: "客厅",
+  nm: "Living Room",
   on: 1,
   mode: 1,
   alarm: 0,
@@ -31,10 +31,10 @@ const rawUnit = {
 test("normalizes device units for the UI", () => {
   const unit = normalizeUnit(rawUnit);
   assert.equal(unit.idx, 1);
-  assert.equal(unit.name, "客厅");
+  assert.equal(unit.name, "Living Room");
   assert.equal(unit.address, "1-1");
-  assert.equal(unit.modeLabel, "制冷");
-  assert.equal(unit.fanLabel, "自动");
+  assert.equal(unit.modeLabel, "Cooling");
+  assert.equal(unit.fanLabel, "Auto");
 });
 
 test("builds a full control command from current state and patch", () => {
@@ -70,16 +70,16 @@ test("stores and applies local unit aliases", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "hvac-alias-"));
   try {
     const store = new AliasStore(dir);
-    await store.set(1, "主卧");
+    await store.set(1, "Primary Bedroom");
 
     const units = await store.apply([normalizeUnit(rawUnit)]);
-    assert.equal(units[0].alias, "主卧");
-    assert.equal(units[0].name, "主卧");
+    assert.equal(units[0].alias, "Primary Bedroom");
+    assert.equal(units[0].name, "Primary Bedroom");
 
     await store.set(1, "");
     const cleared = await store.apply([normalizeUnit(rawUnit)]);
     assert.equal(cleared[0].alias, "");
-    assert.equal(cleared[0].name, "客厅");
+    assert.equal(cleared[0].name, "Living Room");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

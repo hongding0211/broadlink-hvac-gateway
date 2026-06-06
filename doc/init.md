@@ -17,8 +17,8 @@ usable against this device.
 
 ## Device
 
-- Vendor/brand: BroadLink / 博联
-- Label name: 系统网关 / HVAC Management Module / Air condition Management Module
+- Vendor/brand: BroadLink
+- Label name: System Gateway / HVAC Management Module / Air condition Management Module
 - Model: `BL-LAN-AC.GW1`
 - SKU: `GB.T.013.0001.0011`
 - Serial number: `GW12H6EA500279`
@@ -156,30 +156,30 @@ The web UI batches up to 10 `idx` parameters in one control request.
 
 From `/zh/airCloud.html`:
 
-| Value | Chinese | English note |
+| Value | Label | Note |
 | --- | --- | --- |
-| 0 | 自动 | auto |
-| 1 | 制冷 | cooling |
-| 2 | 除湿 | dehumidify |
-| 3 | 清爽 | fresh/dry comfort |
-| 4 | 新风 | fresh air |
-| 5 | 自动除湿 | auto dehumidify |
-| 6 | 贴心睡眠 | sleep |
-| 8 | 制热 | heating |
-| 9 | 地暖 | floor heating |
-| 10 | 强热 | strong heating |
+| 0 | Auto | auto |
+| 1 | Cooling | cooling |
+| 2 | Dehumidify | dehumidify |
+| 3 | Comfort Dry | fresh/dry comfort |
+| 4 | Fresh Air | fresh air |
+| 5 | Auto Dehumidify | auto dehumidify |
+| 6 | Sleep | sleep |
+| 8 | Heating | heating |
+| 9 | Floor Heating | floor heating |
+| 10 | Strong Heating | strong heating |
 
 ## Fan Mapping
 
 From `/zh/airCloud.html`:
 
-| Value | Chinese | English note |
+| Value | Label | Note |
 | --- | --- | --- |
-| 0 | 自动 | auto |
-| 1 | 高风 | high |
-| 2 | 中风 | medium |
-| 4 | 低风 | low |
-| 6 | 微风 | quiet |
+| 0 | Auto | auto |
+| 1 | High | high |
+| 2 | Medium | medium |
+| 4 | Low | low |
+| 6 | Quiet | quiet |
 
 ## Temperature And Flow
 
