@@ -11,6 +11,7 @@
 
   html {
     min-height: 100%;
+    color-scheme: light dark;
     background: #dbe9ef;
   }
 
@@ -31,6 +32,25 @@
     pointer-events: none;
     content: "";
     background: radial-gradient(circle at 50% 10%, rgba(255, 255, 255, 0.42), transparent 34%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html {
+      background: #020814;
+    }
+
+    body {
+      color: #f8fafc;
+      background:
+        linear-gradient(180deg, rgba(2, 8, 20, 0.2), rgba(2, 8, 20, 0.64)),
+        url("/assets/night-weather-wallpaper.png") center top / cover fixed;
+    }
+
+    body::before {
+      background:
+        radial-gradient(circle at 50% 8%, rgba(20, 184, 166, 0.2), transparent 32%),
+        linear-gradient(180deg, rgba(2, 8, 20, 0.12), rgba(2, 8, 20, 0.42));
+    }
   }
 
   button,

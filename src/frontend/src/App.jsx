@@ -94,11 +94,11 @@ export function App() {
     <main className="relative z-10 mx-auto min-h-dvh w-full max-w-5xl px-4 pb-8 pt-[max(22px,env(safe-area-inset-top))] sm:px-6">
       <header className="flex min-h-24 items-center justify-between gap-4">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-600/70">Home Climate</p>
-          <h1 className="mt-1 text-4xl font-bold leading-none text-slate-950 sm:text-6xl">HVAC Control</h1>
+          <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-600/70 dark:text-slate-200/75">Home Climate</p>
+          <h1 className="mt-1 text-4xl font-bold leading-none text-slate-950 dark:text-white sm:text-6xl">HVAC Control</h1>
         </div>
         <button
-          className="grid size-12 place-items-center rounded-2xl border border-white/70 bg-white/55 text-slate-950 shadow-lg shadow-slate-900/10 backdrop-blur-xl transition hover:bg-white/70 disabled:opacity-50"
+          className="grid size-12 place-items-center rounded-2xl border border-white/70 bg-white/55 text-slate-950 shadow-lg shadow-slate-900/10 backdrop-blur-xl transition hover:bg-white/70 disabled:opacity-50 dark:border-white/15 dark:bg-slate-950/35 dark:text-white dark:shadow-black/25 dark:hover:bg-slate-900/55"
           type="button"
           onClick={loadUnits}
           disabled={loading}
@@ -116,7 +116,7 @@ export function App() {
 
       <section className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4" aria-live="polite">
         {units.length === 0 && !loading ? (
-          <p className="col-span-full rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-slate-600 shadow-xl shadow-slate-900/10 backdrop-blur-xl">
+          <p className="col-span-full rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-slate-600 shadow-xl shadow-slate-900/10 backdrop-blur-xl dark:border-white/15 dark:bg-slate-950/35 dark:text-slate-200 dark:shadow-black/25">
             No HVAC units found
           </p>
         ) : null}
