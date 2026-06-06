@@ -2,30 +2,29 @@ const state = {
   units: [],
   modes: [],
   fans: [],
-  filter: "all",
-  loading: false
+  loading: false,
+  selectedUnit: null
 };
 
 const els = {
-  summary: document.querySelector("#summary"),
-  unitCount: document.querySelector("#unitCount"),
-  runningCount: document.querySelector("#runningCount"),
-  alarmCount: document.querySelector("#alarmCount"),
   units: document.querySelector("#units"),
   message: document.querySelector("#message"),
   refreshButton: document.querySelector("#refreshButton"),
-  filterButtons: [...document.querySelectorAll("[data-filter]")],
-  template: document.querySelector("#unitTemplate")
+  template: document.querySelector("#unitTemplate"),
+  panelBackdrop: document.querySelector("#panelBackdrop"),
+  detailPanel: document.querySelector("#detailPanel"),
+  closePanel: document.querySelector("#closePanel"),
+  panelTitle: document.querySelector("#panelTitle"),
+  panelState: document.querySelector("#panelState"),
+  panelMeta: document.querySelector("#panelMeta")
 };
 
 els.refreshButton.addEventListener("click", () => loadUnits());
-for (const button of els.filterButtons) {
-  button.addEventListener("click", () => {
-    state.filter = button.dataset.filter;
-    for (const item of els.filterButtons) item.classList.toggle("active", item === button);
-    render();
-  });
-}
+els.closePanel.addEventListener("click", closePanel);
+els.panelBackdrop.addEventListener("click", closePanel);
+window.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closePanel();
+});
 
 await boot();
 
@@ -55,98 +54,67 @@ async function loadUnits() {
 }
 
 function render() {
-  const running = state.units.filter((unit) => unit.on === 1).length;
-  const alarms = state.units.filter((unit) => unit.alarm !== 0).length;
-  els.unitCount.textContent = String(state.units.length);
-  els.runningCount.textContent = String(running);
-  els.alarmCount.textContent = String(alarms);
-  els.summary.textContent = state.units.length
-    ? `已同步 ${new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}`
-    : "没有读取到内机";
-
   els.units.replaceChildren();
-  const units = filteredUnits();
 
-  if (units.length === 0) {
+  if (state.units.length === 0) {
     const empty = document.createElement("p");
     empty.className = "message";
-    empty.textContent = "当前筛选下没有内机";
+    empty.textContent = "没有读取到空调";
     els.units.append(empty);
     return;
   }
 
-  for (const unit of units) {
+  for (const unit of state.units) {
     els.units.append(renderUnit(unit));
   }
 }
 
 function renderUnit(unit) {
   const node = els.template.content.firstElementChild.cloneNode(true);
+  const displayName = `空调 ${unit.idx + 1}`;
+  const stateName = getStateName(unit);
+
   node.dataset.idx = unit.idx;
-  node.querySelector("h2").textContent = unit.name;
-  node.querySelector(".meta").textContent = `地址 ${unit.address} · ID ${unit.idx}`;
-  node.querySelector(".set-temp").textContent = `${unit.tempSet}°`;
+  node.dataset.state = getCardState(unit);
+  node.querySelector("h2").textContent = displayName;
+  node.querySelector(".state").textContent = stateName;
   node.querySelector(".room-temp").textContent = `${unit.tempIn}°`;
-
-  const alarm = node.querySelector(".alarm");
-  alarm.textContent = unit.alarm === 0 ? "正常" : `告警 ${unit.alarm}`;
-  alarm.dataset.state = unit.alarm === 0 ? "ok" : "bad";
-
-  const power = node.querySelector(".power");
-  power.checked = unit.on === 1;
-  power.addEventListener("change", () => patchUnit(unit.idx, { on: power.checked ? 1 : 0 }, node));
-
-  node.querySelector(".temp-down").addEventListener("click", () => {
-    patchUnit(unit.idx, { tempSet: Math.max(16, unit.tempSet - 1) }, node);
-  });
-  node.querySelector(".temp-up").addEventListener("click", () => {
-    patchUnit(unit.idx, { tempSet: Math.min(32, unit.tempSet + 1) }, node);
-  });
-
-  const mode = node.querySelector(".mode");
-  fillSelect(mode, state.modes, unit.mode);
-  mode.addEventListener("change", () => patchUnit(unit.idx, { mode: Number(mode.value) }, node));
-
-  const fan = node.querySelector(".fan");
-  fillSelect(fan, state.fans, unit.fan);
-  fan.addEventListener("change", () => patchUnit(unit.idx, { fan: Number(fan.value) }, node));
+  node.querySelector(".temperature small").textContent = "当前温度";
+  node.querySelector(".detail").textContent =
+    unit.on === 1 ? `设定 ${unit.tempSet}° · ${unit.modeLabel} · ${unit.fanLabel}` : "轻点查看";
+  node.addEventListener("click", () => openPanel(unit, displayName, stateName));
 
   return node;
 }
 
-async function patchUnit(idx, patch, node) {
-  node.dataset.busy = "true";
-  try {
-    await api(`/api/units/${idx}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(patch)
-    });
-    await loadUnits();
-  } catch (error) {
-    showMessage(error.message);
-    await loadUnits();
-  } finally {
-    delete node.dataset.busy;
-  }
+function openPanel(unit, displayName, stateName) {
+  state.selectedUnit = unit;
+  els.panelTitle.textContent = displayName;
+  els.panelState.textContent = stateName;
+  els.panelMeta.textContent =
+    unit.alarm !== 0
+      ? `告警代码 ${unit.alarm}`
+      : `当前 ${unit.tempIn}°，设定 ${unit.tempSet}°，${unit.modeLabel}，${unit.fanLabel}`;
+  els.panelBackdrop.classList.remove("hidden");
+  els.detailPanel.classList.remove("hidden");
 }
 
-function filteredUnits() {
-  if (state.filter === "on") return state.units.filter((unit) => unit.on === 1);
-  if (state.filter === "off") return state.units.filter((unit) => unit.on === 0);
-  return state.units;
+function closePanel() {
+  state.selectedUnit = null;
+  els.panelBackdrop.classList.add("hidden");
+  els.detailPanel.classList.add("hidden");
 }
 
-function fillSelect(select, options, value) {
-  select.replaceChildren(
-    ...options.map((option) => {
-      const item = document.createElement("option");
-      item.value = String(option.value);
-      item.textContent = option.label;
-      item.selected = option.value === value;
-      return item;
-    })
-  );
+function getCardState(unit) {
+  if (unit.alarm !== 0) return "warning";
+  if (unit.on === 1) return "running";
+  return "off";
+}
+
+function getStateName(unit) {
+  if (unit.alarm !== 0) return "需要检查";
+  if (unit.on === 1) return "运行中";
+  return "已关闭";
 }
 
 async function api(path, options) {

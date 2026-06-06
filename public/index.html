@@ -10,80 +10,54 @@
     <main class="shell">
       <header class="topbar">
         <div>
+          <p class="eyebrow">Home Climate</p>
           <h1>中央空调</h1>
-          <p id="summary">正在连接网关</p>
         </div>
         <button class="icon-button" id="refreshButton" type="button" aria-label="刷新">
           <span aria-hidden="true">↻</span>
         </button>
       </header>
 
-      <section class="status-strip" aria-live="polite">
-        <div>
-          <span class="label">在线内机</span>
-          <strong id="unitCount">--</strong>
-        </div>
-        <div>
-          <span class="label">运行中</span>
-          <strong id="runningCount">--</strong>
-        </div>
-        <div>
-          <span class="label">告警</span>
-          <strong id="alarmCount">--</strong>
-        </div>
-      </section>
-
-      <section class="toolbar">
-        <div class="segmented" role="tablist" aria-label="筛选">
-          <button class="active" data-filter="all" type="button">全部</button>
-          <button data-filter="on" type="button">运行</button>
-          <button data-filter="off" type="button">关闭</button>
-        </div>
-      </section>
-
       <section id="message" class="message hidden"></section>
       <section id="units" class="unit-grid" aria-live="polite"></section>
     </main>
 
     <template id="unitTemplate">
-      <article class="unit-card">
+      <button class="unit-card" type="button">
         <div class="unit-card__head">
           <div>
             <h2></h2>
-            <p class="meta"></p>
+            <p class="state"></p>
           </div>
-          <label class="switch">
-            <input class="power" type="checkbox" />
-            <span></span>
-          </label>
+          <span class="power-dot" aria-hidden="true"></span>
         </div>
 
-        <div class="temperature-row">
-          <button class="step temp-down" type="button" aria-label="降低温度">−</button>
-          <div class="temperature">
-            <span class="set-temp"></span>
-            <small>设定</small>
-          </div>
-          <button class="step temp-up" type="button" aria-label="升高温度">+</button>
+        <div class="temperature">
+          <span class="room-temp"></span>
+          <small></small>
         </div>
 
-        <div class="room-row">
-          <span>室温 <strong class="room-temp"></strong></span>
-          <span class="alarm"></span>
-        </div>
-
-        <div class="control-grid">
-          <label>
-            <span>模式</span>
-            <select class="mode"></select>
-          </label>
-          <label>
-            <span>风速</span>
-            <select class="fan"></select>
-          </label>
-        </div>
-      </article>
+        <p class="detail"></p>
+      </button>
     </template>
+
+    <div id="panelBackdrop" class="panel-backdrop hidden"></div>
+    <aside id="detailPanel" class="detail-panel hidden" aria-modal="true" role="dialog">
+      <div class="panel-handle"></div>
+      <div class="detail-panel__head">
+        <div>
+          <p class="eyebrow">Air Conditioner</p>
+          <h2 id="panelTitle">空调</h2>
+        </div>
+        <button class="icon-button" id="closePanel" type="button" aria-label="关闭">
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+      <div class="panel-placeholder">
+        <strong id="panelState"></strong>
+        <p id="panelMeta"></p>
+      </div>
+    </aside>
 
     <script src="/app.js" type="module"></script>
   </body>
