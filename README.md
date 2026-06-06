@@ -46,6 +46,7 @@ The Vite dev server proxies `/api` to the Express server on port `3000`.
 | `HVAC_PASSWORD` | empty | Gateway HTTP basic auth password |
 | `HVAC_TIMEOUT_MS` | `5000` | Device request timeout |
 | `PORT` | `3000` | Web UI/API port |
+| `APP_ACCESS_TOKEN` | empty | Optional fixed URL token for web UI/API access |
 
 ## Build
 

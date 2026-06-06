@@ -1,4 +1,5 @@
 import express from "express";
+import { timingSafeEqual } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
@@ -12,6 +13,7 @@ const aliases = new AliasStore();
 const app = express();
 
 app.disable("x-powered-by");
+app.use(requireAccessToken);
 app.use(express.json({ limit: "32kb" }));
 
 app.get("/api/health", (_req, res) => {
@@ -58,3 +60,44 @@ app.listen(config.listenPort, config.listenHost, () => {
   console.log(`HVAC gateway UI listening on http://${config.listenHost}:${config.listenPort}`);
   console.log(`Target BroadLink gateway: ${config.host}:${config.port}`);
 });
+
+function requireAccessToken(req, res, next) {
+  if (!config.appAccessToken) return next();
+
+  const queryToken = firstString(req.query?.token || req.query?.password || req.query?.key);
+  const cookieToken = getCookie(req, "hvac_access");
+  const token = queryToken || cookieToken;
+
+  if (token && safeEqual(token, config.appAccessToken)) {
+    if (queryToken) {
+      res.setHeader("Set-Cookie", `hvac_access=${encodeURIComponent(queryToken)}; Path=/; Max-Age=2592000; SameSite=Lax; HttpOnly`);
+    }
+    return next();
+  }
+
+  return accessDenied(res);
+}
+
+function accessDenied(res) {
+  return res.status(401).send("Access token required");
+}
+
+function safeEqual(actual, expected) {
+  const actualBuffer = Buffer.from(actual);
+  const expectedBuffer = Buffer.from(expected);
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer);
+}
+
+function firstString(value) {
+  if (Array.isArray(value)) return value[0];
+  return typeof value === "string" ? value : "";
+}
+
+function getCookie(req, name) {
+  const header = req.headers.cookie || "";
+  for (const part of header.split(";")) {
+    const [rawKey, ...rawValue] = part.trim().split("=");
+    if (rawKey === name) return decodeURIComponent(rawValue.join("="));
+  }
+  return "";
+}

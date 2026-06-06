@@ -18,7 +18,8 @@ export const config = {
   requestTimeoutMs: Number(process.env.HVAC_TIMEOUT_MS || 5000),
   listenHost: process.env.HOST || "0.0.0.0",
   listenPort: Number(process.env.PORT || 3000),
-  maxStatusPages: Number(process.env.HVAC_MAX_STATUS_PAGES || 64)
+  maxStatusPages: Number(process.env.HVAC_MAX_STATUS_PAGES || 64),
+  appAccessToken: process.env.APP_ACCESS_TOKEN || ""
 };
 
 function loadDotEnv() {
