@@ -1,0 +1,13 @@
+services:
+  hvac-gateway:
+    build: .
+    container_name: broadlink-hvac-gateway
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      HVAC_HOST: "${HVAC_HOST:?Set HVAC_HOST in your shell or .env}"
+      HVAC_PORT: "${HVAC_PORT:-80}"
+      HVAC_USER: "${HVAC_USER:-admin}"
+      HVAC_PASSWORD: "${HVAC_PASSWORD:-}"
+      PORT: "${PORT:-3000}"

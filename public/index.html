@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>中央空调控制</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>中央空调</h1>
+          <p id="summary">正在连接网关</p>
+        </div>
+        <button class="icon-button" id="refreshButton" type="button" aria-label="刷新">
+          <span aria-hidden="true">↻</span>
+        </button>
+      </header>
+
+      <section class="status-strip" aria-live="polite">
+        <div>
+          <span class="label">在线内机</span>
+          <strong id="unitCount">--</strong>
+        </div>
+        <div>
+          <span class="label">运行中</span>
+          <strong id="runningCount">--</strong>
+        </div>
+        <div>
+          <span class="label">告警</span>
+          <strong id="alarmCount">--</strong>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <div class="segmented" role="tablist" aria-label="筛选">
+          <button class="active" data-filter="all" type="button">全部</button>
+          <button data-filter="on" type="button">运行</button>
+          <button data-filter="off" type="button">关闭</button>
+        </div>
+      </section>
+
+      <section id="message" class="message hidden"></section>
+      <section id="units" class="unit-grid" aria-live="polite"></section>
+    </main>
+
+    <template id="unitTemplate">
+      <article class="unit-card">
+        <div class="unit-card__head">
+          <div>
+            <h2></h2>
+            <p class="meta"></p>
+          </div>
+          <label class="switch">
+            <input class="power" type="checkbox" />
+            <span></span>
+          </label>
+        </div>
+
+        <div class="temperature-row">
+          <button class="step temp-down" type="button" aria-label="降低温度">−</button>
+          <div class="temperature">
+            <span class="set-temp"></span>
+            <small>设定</small>
+          </div>
+          <button class="step temp-up" type="button" aria-label="升高温度">+</button>
+        </div>
+
+        <div class="room-row">
+          <span>室温 <strong class="room-temp"></strong></span>
+          <span class="alarm"></span>
+        </div>
+
+        <div class="control-grid">
+          <label>
+            <span>模式</span>
+            <select class="mode"></select>
+          </label>
+          <label>
+            <span>风速</span>
+            <select class="fan"></select>
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
