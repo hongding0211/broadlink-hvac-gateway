@@ -53,6 +53,22 @@ test("builds a full control command from current state and patch", () => {
   });
 });
 
+test("defaults fan to auto when powering on an off unit without explicit fan", () => {
+  const current = normalizeUnit({ ...rawUnit, on: 0, fan: 1 });
+  const command = buildControlCommand(current, { on: 1 });
+
+  assert.equal(command.on, 1);
+  assert.equal(command.fan, 0);
+});
+
+test("preserves explicit fan when powering on an off unit", () => {
+  const current = normalizeUnit({ ...rawUnit, on: 0, fan: 1 });
+  const command = buildControlCommand(current, { on: 1, fan: 2 });
+
+  assert.equal(command.on, 1);
+  assert.equal(command.fan, 2);
+});
+
 test("rejects invalid temperatures before sending to device", () => {
   const current = normalizeUnit(rawUnit);
   assert.throws(() => buildControlCommand(current, { tempSet: 33 }), /tempSet/);

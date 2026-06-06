@@ -209,6 +209,10 @@ export function buildControlCommand(current, patch) {
     if (Object.hasOwn(patch, key)) command[key] = Number(patch[key]);
   }
 
+  if (current.on === 0 && command.on === 1 && !Object.hasOwn(patch, "fan")) {
+    command.fan = 0;
+  }
+
   validateControlCommand(command);
   return command;
 }
