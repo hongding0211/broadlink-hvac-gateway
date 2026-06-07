@@ -18,7 +18,7 @@ const weekdays = [
 
 export function AutomationTab({ units, modes, fans }) {
   const [automations, setAutomations] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [sheetMode, setSheetMode] = useState(null);

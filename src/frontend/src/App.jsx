@@ -312,8 +312,12 @@ export function App() {
         </section>
       ) : null}
 
-      {activeTab === "home" ? (
-        <section className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4" aria-live="polite" aria-busy={loadingUnits || syncingUnits > 0}>
+      <section
+        className={`grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4 ${activeTab === "home" ? "" : "hidden"}`}
+        aria-live="polite"
+        aria-busy={loadingUnits || syncingUnits > 0}
+        aria-hidden={activeTab !== "home"}
+      >
           {!loadingUnits && units.length === 0 ? (
             <p className="col-span-full rounded-2xl bg-white/18 px-4 py-3 text-slate-600 shadow-lg shadow-slate-900/5 backdrop-blur-xl dark:border dark:border-white/15 dark:bg-slate-950/35 dark:text-slate-200 dark:shadow-black/25">
               No HVAC units found
@@ -324,10 +328,11 @@ export function App() {
                 <UnitCard key={unit.idx} unit={unit} timers={unitTimersByIdx.get(unit.idx) || []} onOpen={() => setSelectedIdx(unit.idx)} />
               ))
             : null}
-        </section>
-      ) : (
+      </section>
+
+      <section className={activeTab === "automation" ? "" : "hidden"} aria-hidden={activeTab !== "automation"}>
         <AutomationTab units={units} modes={modes} fans={fans} />
-      )}
+      </section>
 
       <DetailPanel
         unit={selectedUnit}
