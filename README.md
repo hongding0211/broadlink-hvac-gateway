@@ -75,6 +75,11 @@ network that can reach the gateway IP.
 - `PATCH /api/units/:idx`: update one unit with any of `on`, `mode`, `tempSet`,
   `fan`, `FlowDirection1`, `FlowDirection2`
 - `GET /api/options`: read mode and fan labels
+- `GET /api/automations`: read shared automation rules
+- `POST /api/automations`: create a shared automation rule
+- `PATCH /api/automations/:id`: update a shared automation rule
+- `DELETE /api/automations/:id`: delete a shared automation rule
 
 Writes are intentionally implemented as read-merge-write commands because the
 gateway expects a full `f=18` control state, not a partial patch.
+Enabled automations are evaluated by the backend while the server is running.

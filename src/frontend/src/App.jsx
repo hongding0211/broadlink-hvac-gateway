@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { CalendarClock, House, RefreshCw } from "lucide-react";
+import { AutomationTab } from "./components/AutomationTab.jsx";
 import { DetailPanel } from "./components/DetailPanel.jsx";
 import { UnitCard } from "./components/UnitCard.jsx";
 import { api } from "./lib/hvac.js";
@@ -13,6 +14,7 @@ export function App() {
   const [message, setMessage] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [aliasBusy, setAliasBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState("home");
   const desiredPatchesRef = useRef(new Map());
   const inFlightUnitsRef = useRef(new Set());
 
@@ -157,21 +159,25 @@ export function App() {
   }
 
   return (
-    <main className="relative z-10 mx-auto min-h-dvh w-full max-w-5xl px-4 pb-8 pt-[max(22px,env(safe-area-inset-top))] sm:px-6">
+    <main className="relative z-10 mx-auto min-h-dvh w-full max-w-5xl px-4 pb-[calc(92px+env(safe-area-inset-bottom))] pt-[max(22px,env(safe-area-inset-top))] sm:px-6">
       <header className="flex min-h-24 items-center justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-600/70 dark:text-slate-200/75">MUCAA</p>
-          <h1 className="mt-1 text-4xl font-bold leading-none text-slate-950 dark:text-white sm:text-6xl">Home climate</h1>
+          <h1 className="mt-1 text-4xl font-bold leading-none text-slate-950 dark:text-white sm:text-6xl">
+            {activeTab === "home" ? "Home climate" : "Automation"}
+          </h1>
         </div>
-        <button
-          className="grid size-12 place-items-center rounded-full bg-white/12 text-slate-950 shadow-sm shadow-slate-900/5 backdrop-blur-xl transition hover:bg-white/20 focus:outline-none disabled:opacity-50 dark:bg-slate-950/42 dark:text-white dark:shadow-black/25 dark:hover:bg-slate-950/56"
-          type="button"
-          onClick={() => loadUnits()}
-          disabled={loadingUnits}
-          aria-label="Refresh"
-        >
-          <RefreshCw className={loadingUnits || syncingUnits > 0 ? "size-5 animate-spin" : "size-5"} />
-        </button>
+        {activeTab === "home" ? (
+          <button
+            className="grid size-12 place-items-center rounded-full bg-white/12 text-slate-950 shadow-sm shadow-slate-900/5 backdrop-blur-xl transition hover:bg-white/20 focus:outline-none disabled:opacity-50 dark:bg-slate-950/42 dark:text-white dark:shadow-black/25 dark:hover:bg-slate-950/56"
+            type="button"
+            onClick={() => loadUnits()}
+            disabled={loadingUnits}
+            aria-label="Refresh"
+          >
+            <RefreshCw className={loadingUnits || syncingUnits > 0 ? "size-5 animate-spin" : "size-5"} />
+          </button>
+        ) : null}
       </header>
 
       {message ? (
@@ -180,18 +186,22 @@ export function App() {
         </section>
       ) : null}
 
-      <section className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4" aria-live="polite" aria-busy={loadingUnits || syncingUnits > 0}>
-        {!loadingUnits && units.length === 0 ? (
-          <p className="col-span-full rounded-2xl bg-white/18 px-4 py-3 text-slate-600 shadow-lg shadow-slate-900/5 backdrop-blur-xl dark:border dark:border-white/15 dark:bg-slate-950/35 dark:text-slate-200 dark:shadow-black/25">
-            No HVAC units found
-          </p>
-        ) : null}
-        {!loadingUnits
-          ? units.map((unit) => (
-              <UnitCard key={unit.idx} unit={unit} onOpen={() => setSelectedIdx(unit.idx)} />
-            ))
-          : null}
-      </section>
+      {activeTab === "home" ? (
+        <section className="grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4" aria-live="polite" aria-busy={loadingUnits || syncingUnits > 0}>
+          {!loadingUnits && units.length === 0 ? (
+            <p className="col-span-full rounded-2xl bg-white/18 px-4 py-3 text-slate-600 shadow-lg shadow-slate-900/5 backdrop-blur-xl dark:border dark:border-white/15 dark:bg-slate-950/35 dark:text-slate-200 dark:shadow-black/25">
+              No HVAC units found
+            </p>
+          ) : null}
+          {!loadingUnits
+            ? units.map((unit) => (
+                <UnitCard key={unit.idx} unit={unit} onOpen={() => setSelectedIdx(unit.idx)} />
+              ))
+            : null}
+        </section>
+      ) : (
+        <AutomationTab units={units} modes={modes} fans={fans} />
+      )}
 
       <DetailPanel
         unit={selectedUnit}
@@ -202,7 +212,42 @@ export function App() {
         onSaveAlias={saveAlias}
         onUpdate={updateSelected}
       />
+
+      <nav className="fixed inset-x-0 bottom-0 z-10 px-4 pb-[max(14px,env(safe-area-inset-bottom))]">
+        <div className="mx-auto grid h-16 max-w-sm grid-cols-2 gap-2 rounded-full border border-white/16 bg-white/24 p-2 shadow-xl shadow-slate-900/12 backdrop-blur-2xl dark:border-white/10 dark:bg-slate-950/64 dark:shadow-black/35">
+          <TabButton
+            active={activeTab === "home"}
+            icon={<House className="size-5" />}
+            label="Home"
+            onClick={() => setActiveTab("home")}
+          />
+          <TabButton
+            active={activeTab === "automation"}
+            icon={<CalendarClock className="size-5" />}
+            label="Auto"
+            onClick={() => setActiveTab("automation")}
+          />
+        </div>
+      </nav>
     </main>
+  );
+}
+
+function TabButton({ active, icon, label, onClick }) {
+  return (
+    <button
+      className={`flex min-w-0 items-center justify-center gap-2 rounded-full text-sm font-bold transition focus:outline-none ${
+        active
+          ? "border border-white/35 bg-white/42 text-slate-950 shadow-sm shadow-slate-900/8 backdrop-blur-3xl dark:border-white/16 dark:bg-white/14 dark:text-white dark:shadow-black/20"
+          : "text-slate-700 hover:bg-white/22 dark:text-slate-200 dark:hover:bg-white/8"
+      }`}
+      type="button"
+      aria-current={active ? "page" : undefined}
+      onClick={onClick}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+    </button>
   );
 }
 

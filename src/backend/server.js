@@ -4,12 +4,16 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "./config.js";
 import { AliasStore } from "./aliasStore.js";
+import { AutomationRunner } from "./automationRunner.js";
+import { AutomationStore } from "./automationStore.js";
 import { fans, HvacClient, modes } from "./hvacClient.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../../dist");
 const client = new HvacClient(config);
 const aliases = new AliasStore();
+const automations = new AutomationStore();
+const automationRunner = new AutomationRunner({ store: automations, client });
 const app = express();
 
 app.disable("x-powered-by");
@@ -38,6 +42,25 @@ app.put("/api/units/:idx/alias", async (req, res) => {
   res.json(result);
 });
 
+app.get("/api/automations", async (_req, res) => {
+  res.json({ automations: await automations.list() });
+});
+
+app.post("/api/automations", async (req, res) => {
+  const automation = await automations.create(req.body || {});
+  res.status(201).json({ automation });
+});
+
+app.patch("/api/automations/:id", async (req, res) => {
+  const automation = await automations.update(req.params.id, req.body || {});
+  res.json({ automation });
+});
+
+app.delete("/api/automations/:id", async (req, res) => {
+  const result = await automations.delete(req.params.id);
+  res.json(result);
+});
+
 app.use("/api", (_req, res) => {
   res.status(404).json({ error: "API route not found" });
 });
@@ -59,6 +82,7 @@ app.use((error, _req, res, _next) => {
 app.listen(config.listenPort, config.listenHost, () => {
   console.log(`HVAC gateway UI listening on http://${config.listenHost}:${config.listenPort}`);
   console.log(`Target BroadLink gateway: ${config.host}:${config.port}`);
+  automationRunner.start();
 });
 
 function requireAccessToken(req, res, next) {

@@ -4,6 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { AliasStore } from "../src/backend/aliasStore.js";
+import { AutomationRunner } from "../src/backend/automationRunner.js";
+import { AutomationStore } from "../src/backend/automationStore.js";
 import { buildControlCommand, normalizeUnit, parseDeviceJson } from "../src/backend/hvacClient.js";
 
 const rawUnit = {
@@ -99,4 +101,125 @@ test("stores and applies local unit aliases", async () => {
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test("stores shared automations", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-automation-"));
+  try {
+    const store = new AutomationStore(dir);
+    const automation = await store.create({
+      name: "Morning",
+      unitIdxs: [1, 2, 1],
+      time: "08:00",
+      days: ["mon", "tue", "mon"],
+      mode: 1,
+      fan: 0,
+      tempSet: 24
+    });
+
+    assert.equal(automation.enabled, true);
+    assert.deepEqual(automation.unitIdxs, [1, 2]);
+    assert.equal(automation.unitIdx, 1);
+    assert.deepEqual(automation.days, ["mon", "tue"]);
+
+    const updated = await store.update(automation.id, { enabled: false });
+    assert.equal(updated.enabled, false);
+
+    const list = await store.list();
+    assert.equal(list.length, 1);
+    assert.equal(list[0].name, "Morning");
+
+    await store.delete(automation.id);
+    assert.deepEqual(await store.list(), []);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("rejects invalid automations", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-automation-invalid-"));
+  try {
+    const store = new AutomationStore(dir);
+    await assert.rejects(
+      () =>
+        store.create({
+          name: "Bad",
+          unitIdxs: [1],
+          time: "25:00",
+          days: ["mon"],
+          mode: 1,
+          fan: 0,
+          tempSet: 24
+        }),
+      /time/
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runs due automations once per matching day and minute", async () => {
+  const updates = [];
+  const store = {
+    async list() {
+      return [
+        {
+          id: "morning",
+          name: "Morning",
+          enabled: true,
+          unitIdxs: [2, 4],
+          time: "08:00",
+          days: ["mon"],
+          mode: 1,
+          fan: 0,
+          tempSet: 24
+        },
+        {
+          id: "disabled",
+          name: "Disabled",
+          enabled: false,
+          unitIdxs: [3],
+          time: "08:00",
+          days: ["mon"],
+          mode: 8,
+          fan: 1,
+          tempSet: 26
+        }
+      ];
+    }
+  };
+  const client = {
+    async updateUnit(idx, patch) {
+      updates.push({ idx, patch });
+    }
+  };
+  const runner = new AutomationRunner({
+    store,
+    client,
+    now: () => new Date("2026-06-08T08:00:20")
+  });
+
+  await runner.runDueAutomations();
+  await runner.runDueAutomations();
+
+  assert.deepEqual(updates, [
+    {
+      idx: 2,
+      patch: {
+        on: 1,
+        mode: 1,
+        fan: 0,
+        tempSet: 24
+      }
+    },
+    {
+      idx: 4,
+      patch: {
+        on: 1,
+        mode: 1,
+        fan: 0,
+        tempSet: 24
+      }
+    }
+  ]);
 });
