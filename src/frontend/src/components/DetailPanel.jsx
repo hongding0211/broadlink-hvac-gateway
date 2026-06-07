@@ -2,9 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Switch } from "@base-ui/react/switch";
 import { Drawer } from "vaul";
 import {
-  ArrowLeftRight,
-  ArrowUpDown,
-  ChevronDown,
   CloudSun,
   Droplets,
   Edit3,
@@ -14,19 +11,17 @@ import {
   Plus,
   Power,
   Snowflake,
-  SlidersHorizontal,
   Sparkles,
   Waves,
   Wind
 } from "lucide-react";
-import { flow1Options, flow2Options, getDisplayName, getStateName } from "../lib/hvac.js";
+import { getDisplayName, getStateName } from "../lib/hvac.js";
 
 export function DetailPanel({ unit, modes, fans, busy, onClose, onSaveAlias, onUpdate }) {
   const closeTimerRef = useRef(null);
   const [displayedUnit, setDisplayedUnit] = useState(unit);
   const [editingAlias, setEditingAlias] = useState(false);
   const [alias, setAlias] = useState("");
-  const [showMore, setShowMore] = useState(false);
 
   useEffect(() => {
     window.clearTimeout(closeTimerRef.current);
@@ -47,7 +42,6 @@ export function DetailPanel({ unit, modes, fans, busy, onClose, onSaveAlias, onU
     if (!unit) return;
     setEditingAlias(false);
     setAlias(unit.alias || "");
-    setShowMore(false);
   }, [unit?.idx]);
 
   const activeUnit = unit || displayedUnit;
@@ -191,43 +185,6 @@ export function DetailPanel({ unit, modes, fans, busy, onClose, onSaveAlias, onU
             />
           </section>
 
-          <button
-            className="mt-3 flex min-h-12 w-full items-center justify-between rounded-[22px] bg-white/10 px-4 text-left text-sm font-bold text-slate-700 transition hover:bg-white/18 dark:bg-slate-950/30 dark:text-slate-200 dark:hover:bg-slate-950/44"
-            type="button"
-            onClick={() => setShowMore((value) => !value)}
-            aria-expanded={showMore}
-          >
-            <span className="flex items-center gap-2">
-              <SlidersHorizontal className="size-4" />
-              More
-            </span>
-            <ChevronDown className={`size-4 transition ${showMore ? "rotate-180" : ""}`} />
-          </button>
-
-          {showMore ? (
-            <section className="mt-3 grid gap-3">
-              <OptionRail
-                label="Vertical airflow"
-                value={activeUnit.FlowDirection1}
-                options={flow1Options}
-                disabled={controlsDisabled}
-                iconFor={() => ArrowUpDown}
-                shortLabelFor={getFlowShortLabel}
-                isSelected={(optionValue) => optionValue === activeUnit.FlowDirection1}
-                onChange={(value) => onUpdate({ FlowDirection1: value })}
-              />
-              <OptionRail
-                label="Horizontal airflow"
-                value={activeUnit.FlowDirection2}
-                options={flow2Options}
-                disabled={controlsDisabled}
-                iconFor={() => ArrowLeftRight}
-                shortLabelFor={getFlowShortLabel}
-                isSelected={(optionValue) => optionValue === activeUnit.FlowDirection2}
-                onChange={(value) => onUpdate({ FlowDirection2: value })}
-              />
-            </section>
-          ) : null}
           </div>
         </Drawer.Content>
       </Drawer.Portal>
@@ -391,10 +348,6 @@ function getFanShortLabel(option) {
   };
 
   return labels[option.value] || option.label;
-}
-
-function getFlowShortLabel(option) {
-  return option.value === 0 ? "Keep" : `P${option.value}`;
 }
 
 function getModeTheme(mode) {

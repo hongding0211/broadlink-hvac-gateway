@@ -49,8 +49,29 @@ test("builds a full control command from current state and patch", () => {
     mode: 1,
     tempSet: 25,
     fan: 0,
-    FlowDirection1: 0,
-    FlowDirection2: 0,
+    idx: 1
+  });
+});
+
+test("omits airflow fields unless explicitly patched", () => {
+  const current = normalizeUnit(rawUnit);
+
+  assert.deepEqual(buildControlCommand(current, { fan: 2 }), {
+    f: 18,
+    on: 1,
+    mode: 1,
+    tempSet: 26,
+    fan: 2,
+    idx: 1
+  });
+
+  assert.deepEqual(buildControlCommand(current, { FlowDirection1: 3 }), {
+    f: 18,
+    on: 1,
+    mode: 1,
+    tempSet: 26,
+    fan: 0,
+    FlowDirection1: 3,
     idx: 1
   });
 });

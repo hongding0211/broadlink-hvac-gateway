@@ -5,6 +5,9 @@ import { DetailPanel } from "./components/DetailPanel.jsx";
 import { UnitCard } from "./components/UnitCard.jsx";
 import { api } from "./lib/hvac.js";
 
+const unitPollIntervalMs = 2000;
+const optimisticHoldMs = 10000;
+
 export function App() {
   const [units, setUnits] = useState([]);
   const [modes, setModes] = useState([]);
@@ -17,6 +20,8 @@ export function App() {
   const [activeTab, setActiveTab] = useState("home");
   const desiredPatchesRef = useRef(new Map());
   const inFlightUnitsRef = useRef(new Set());
+  const optimisticUntilRef = useRef(new Map());
+  const pollingUnitsRef = useRef(false);
 
   const selectedUnit = useMemo(
     () => units.find((unit) => unit.idx === selectedIdx) || null,
@@ -45,6 +50,66 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    let timerId = null;
+    let cancelled = false;
+
+    function stopPolling() {
+      if (!timerId) return;
+      window.clearInterval(timerId);
+      timerId = null;
+    }
+
+    function startPolling() {
+      if (timerId || document.visibilityState !== "visible") return;
+      timerId = window.setInterval(() => {
+        void pollUnits();
+      }, unitPollIntervalMs);
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void pollUnits();
+        startPolling();
+      } else {
+        stopPolling();
+      }
+    }
+
+    async function pollUnits() {
+      if (cancelled || document.visibilityState !== "visible" || pollingUnitsRef.current) return;
+      pollingUnitsRef.current = true;
+
+      try {
+        const payload = await api("/api/units");
+        setUnits((currentUnits) =>
+          mergePolledUnits(
+            currentUnits,
+            payload.units,
+            desiredPatchesRef.current,
+            inFlightUnitsRef.current,
+            optimisticUntilRef.current,
+            Date.now()
+          )
+        );
+        setMessage("");
+      } catch (error) {
+        setMessage(error.message);
+      } finally {
+        pollingUnitsRef.current = false;
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    startPolling();
+
+    return () => {
+      cancelled = true;
+      stopPolling();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   async function loadUnits({ hideContent = true } = {}) {
@@ -99,6 +164,7 @@ export function App() {
     const idx = selectedUnit.idx;
     const currentDesiredPatch = desiredPatchesRef.current.get(idx) || {};
     desiredPatchesRef.current.set(idx, { ...currentDesiredPatch, ...patch });
+    optimisticUntilRef.current.set(idx, Date.now() + optimisticHoldMs);
     applyUnitPatch(idx, patch);
     setMessage("");
     void flushUnitUpdate(idx);
@@ -131,6 +197,7 @@ export function App() {
       const latestDesiredPatch = desiredPatchesRef.current.get(idx);
       if (patchesEqual(latestDesiredPatch, sentPatch)) {
         desiredPatchesRef.current.delete(idx);
+        optimisticUntilRef.current.delete(idx);
         setMessage(error.message);
         await loadUnits({ hideContent: false });
       }
@@ -260,4 +327,19 @@ function patchesEqual(left, right) {
   }
 
   return true;
+}
+
+function mergePolledUnits(currentUnits, polledUnits, desiredPatches, inFlightUnits, optimisticUntil, now) {
+  const currentUnitsByIdx = new Map(currentUnits.map((unit) => [unit.idx, unit]));
+
+  return polledUnits.map((polledUnit) => {
+    const holdUntil = optimisticUntil.get(polledUnit.idx) || 0;
+    if (holdUntil <= now) optimisticUntil.delete(polledUnit.idx);
+
+    if (!desiredPatches.has(polledUnit.idx) && !inFlightUnits.has(polledUnit.idx) && holdUntil <= now) {
+      return polledUnit;
+    }
+
+    return currentUnitsByIdx.get(polledUnit.idx) || polledUnit;
+  });
 }

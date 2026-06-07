@@ -200,8 +200,6 @@ export function buildControlCommand(current, patch) {
     mode: current.mode,
     tempSet: current.tempSet,
     fan: current.fan,
-    FlowDirection1: current.FlowDirection1,
-    FlowDirection2: current.FlowDirection2,
     idx: current.idx
   };
 
@@ -224,25 +222,27 @@ function validateControlCommand(command) {
   if (!Number.isInteger(command.tempSet) || command.tempSet < 16 || command.tempSet > 32) {
     throw badRequest("tempSet must be an integer from 16 to 32");
   }
-  if (!Number.isInteger(command.FlowDirection1) || command.FlowDirection1 < 0 || command.FlowDirection1 > 7) {
+  if (Object.hasOwn(command, "FlowDirection1") && (!Number.isInteger(command.FlowDirection1) || command.FlowDirection1 < 0 || command.FlowDirection1 > 7)) {
     throw badRequest("FlowDirection1 must be an integer from 0 to 7");
   }
-  if (!Number.isInteger(command.FlowDirection2) || command.FlowDirection2 < 0 || command.FlowDirection2 > 6) {
+  if (Object.hasOwn(command, "FlowDirection2") && (!Number.isInteger(command.FlowDirection2) || command.FlowDirection2 < 0 || command.FlowDirection2 > 6)) {
     throw badRequest("FlowDirection2 must be an integer from 0 to 6");
   }
 }
 
 function pickControlPatch(command) {
-  return {
+  const patch = {
     on: command.on,
     mode: command.mode,
     modeLabel: MODE_LABELS[command.mode] || `Mode ${command.mode}`,
     tempSet: command.tempSet,
     fan: command.fan,
-    fanLabel: FAN_LABELS[command.fan] || `Fan ${command.fan}`,
-    FlowDirection1: command.FlowDirection1,
-    FlowDirection2: command.FlowDirection2
+    fanLabel: FAN_LABELS[command.fan] || `Fan ${command.fan}`
   };
+
+  if (Object.hasOwn(command, "FlowDirection1")) patch.FlowDirection1 = command.FlowDirection1;
+  if (Object.hasOwn(command, "FlowDirection2")) patch.FlowDirection2 = command.FlowDirection2;
+  return patch;
 }
 
 function badRequest(message) {
