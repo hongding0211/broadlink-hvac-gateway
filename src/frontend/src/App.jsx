@@ -285,7 +285,7 @@ export function App() {
   }
 
   return (
-    <main className="relative z-10 mx-auto min-h-dvh w-full max-w-5xl px-4 pb-[calc(92px+env(safe-area-inset-bottom))] pt-[max(22px,env(safe-area-inset-top))] sm:px-6">
+    <main className="relative z-10 mx-auto h-[var(--app-height,100dvh)] w-full max-w-5xl overflow-y-auto overscroll-contain px-4 pb-[calc(92px+env(safe-area-inset-bottom))] pt-[max(22px,env(safe-area-inset-top))] [touch-action:pan-y] [-webkit-overflow-scrolling:touch] sm:px-6">
       <header className="flex min-h-24 items-center justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.08em] text-slate-600/70 dark:text-slate-200/75">MUCAA</p>
