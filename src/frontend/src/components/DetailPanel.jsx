@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { Switch } from "@base-ui/react/switch";
 import { Drawer } from "vaul";
 import {
+  CalendarClock,
+  Check,
   CloudSun,
   Droplets,
   Edit3,
+  Ellipsis,
   Flame,
   Minus,
   Moon,
@@ -13,15 +16,18 @@ import {
   Snowflake,
   Sparkles,
   Waves,
-  Wind
+  Wind,
+  X
 } from "lucide-react";
 import { getDisplayName, getStateName } from "../lib/hvac.js";
 
-export function DetailPanel({ unit, modes, fans, busy, onClose, onSaveAlias, onUpdate }) {
+export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onSaveAlias, onUpdate, onSaveTimer, onDeleteTimer }) {
   const closeTimerRef = useRef(null);
   const [displayedUnit, setDisplayedUnit] = useState(unit);
   const [editingAlias, setEditingAlias] = useState(false);
   const [alias, setAlias] = useState("");
+  const offTimer = timers.find((timer) => timer.action === "off");
+  const onTimer = timers.find((timer) => timer.action === "on");
 
   useEffect(() => {
     window.clearTimeout(closeTimerRef.current);
@@ -185,10 +191,229 @@ export function DetailPanel({ unit, modes, fans, busy, onClose, onSaveAlias, onU
             />
           </section>
 
+          <section className="mt-3 rounded-[26px] bg-white/10 px-3 py-3 backdrop-blur-xl dark:bg-slate-950/34">
+            <div className="grid gap-4">
+              <TimerRow
+                label="Off"
+                action="off"
+                timer={offTimer}
+                disabled={panelDisabled}
+                onSchedule={(runAt, presetMinutes) => onSaveTimer(activeUnit.idx, "off", runAt, presetMinutes)}
+                onDelete={() => onDeleteTimer(activeUnit.idx, "off")}
+              />
+              <div className="mx-1 h-px bg-slate-900/8 dark:bg-white/10" />
+              <TimerRow
+                label="On"
+                action="on"
+                timer={onTimer}
+                disabled={panelDisabled}
+                onSchedule={(runAt, presetMinutes) => onSaveTimer(activeUnit.idx, "on", runAt, presetMinutes)}
+                onDelete={() => onDeleteTimer(activeUnit.idx, "on")}
+              />
+            </div>
+          </section>
+
           </div>
         </Drawer.Content>
       </Drawer.Portal>
     </Drawer.Root>
+  );
+}
+
+const quickTimerOptionsByAction = {
+  off: [
+    { label: "1h", minutes: 60 },
+    { label: "2h", minutes: 120 },
+    { label: "4h", minutes: 240 }
+  ],
+  on: [
+    { label: "30m", minutes: 30 },
+    { label: "1h", minutes: 60 },
+    { label: "8h", minutes: 480 }
+  ]
+};
+
+function TimerRow({ label, action, timer, disabled, onSchedule, onDelete }) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customTime, setCustomTime] = useState("");
+  const [optimisticTimer, setOptimisticTimer] = useState(undefined);
+  const quickTimerOptions = quickTimerOptionsByAction[action] || quickTimerOptionsByAction.off;
+  const selectedQuickMinutes = getSelectedQuickMinutes(timer, quickTimerOptions);
+  const customTitle = action === "on" ? "On" : "Off";
+  const displayedSelection = optimisticTimer === undefined ? selectedQuickMinutes : optimisticTimer.selection;
+  const displayedRunAt = optimisticTimer?.runAt ?? timer?.runAt;
+  const displayedPresetMinutes = optimisticTimer?.presetMinutes ?? timer?.presetMinutes;
+  const moreSelected = displayedSelection === "more" || (optimisticTimer === undefined && Boolean(timer) && selectedQuickMinutes === null);
+  const statusText = getTimerStatusText(action, displayedRunAt, displayedSelection);
+
+  useEffect(() => {
+    setOptimisticTimer(undefined);
+  }, [timer?.runAt]);
+
+  function confirmCustomTime() {
+    if (!isTimeValue(customTime)) return;
+
+    const runAt = resolveFutureRunAt(customTime);
+    setOptimisticTimer({ selection: "more", runAt });
+    onSchedule(runAt);
+    setCustomOpen(false);
+  }
+
+  return (
+    <div className="px-1">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 text-sm font-bold text-slate-600/80 dark:text-slate-300/80">{label}</div>
+        {statusText ? <div className="shrink-0 text-xs font-bold text-slate-500 dark:text-slate-400">{statusText}</div> : null}
+      </div>
+      <div className="mt-3 grid grid-cols-4 gap-2" role="group" aria-label={label}>
+        {quickTimerOptions.map((option) => (
+          <TimerActionButton
+            key={option.minutes}
+            label={option.label}
+            minutes={option.minutes}
+            runAt={displayedSelection === option.minutes ? displayedRunAt : undefined}
+            presetMinutes={displayedSelection === option.minutes ? displayedPresetMinutes : undefined}
+            action={action}
+            selected={displayedSelection === option.minutes}
+            disabled={disabled}
+            onClick={() => {
+              if (displayedSelection === option.minutes) {
+                setOptimisticTimer({ selection: "none" });
+                onDelete();
+                return;
+              }
+
+              const runAt = resolveOffsetRunAt(option.minutes);
+              setOptimisticTimer({ selection: option.minutes, runAt, presetMinutes: option.minutes });
+              onSchedule(runAt, option.minutes);
+            }}
+          />
+        ))}
+        <TimerActionButton
+          label="More"
+          icon={<Ellipsis className="size-5" />}
+          selected={moreSelected}
+          disabled={disabled}
+          onClick={() => {
+            setCustomTime(toTimeValue(timer?.runAt));
+            setCustomOpen(true);
+          }}
+        />
+      </div>
+      <Drawer.Root open={customOpen} onOpenChange={setCustomOpen} direction="bottom" fixed repositionInputs>
+        <Drawer.Portal>
+          <Drawer.Overlay className="fixed inset-0 z-40 bg-black/18 backdrop-blur-sm dark:bg-black/42" />
+          <Drawer.Content className="fixed bottom-0 left-1/2 z-50 w-full max-w-[560px] -translate-x-1/2 rounded-t-[30px] bg-white/88 px-5 pb-[max(36px,env(safe-area-inset-bottom))] pt-3 text-slate-950 shadow-2xl shadow-slate-900/20 backdrop-blur-2xl outline-none dark:border dark:border-white/12 dark:bg-slate-950/92 dark:text-white dark:shadow-black/50 sm:bottom-[max(16px,env(safe-area-inset-bottom))] sm:w-[min(560px,calc(100%-28px))] sm:rounded-[30px]">
+            <Drawer.Handle className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-slate-900/18 dark:bg-white/30" />
+            <Drawer.Title className="text-xl font-bold text-slate-950 dark:text-white">{customTitle}</Drawer.Title>
+            <label className="mt-5 grid gap-2">
+              <span className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">Time</span>
+              <div className="grid grid-cols-[1fr_auto] items-center gap-3">
+                <input
+                  className="timer-sheet-time-input min-h-16 rounded-[24px] bg-white px-4 text-center text-4xl font-bold tracking-normal text-slate-950 outline-none shadow-sm shadow-slate-900/8 dark:border dark:border-white/10 dark:bg-slate-900/80 dark:text-white dark:shadow-black/24"
+                  type="time"
+                  step="60"
+                  value={customTime}
+                  onInput={(event) => setCustomTime(event.currentTarget.value)}
+                  onChange={(event) => setCustomTime(event.currentTarget.value)}
+                  disabled={disabled}
+                />
+                <div className="flex items-center gap-2">
+                  {timer ? (
+                    <button
+                      className="grid size-14 place-items-center rounded-full bg-white text-slate-500 shadow-sm shadow-slate-900/8 transition active:scale-95 disabled:opacity-45 dark:border dark:border-white/10 dark:bg-slate-900/80 dark:text-slate-200 dark:shadow-black/24"
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => {
+                        setOptimisticTimer({ selection: "none" });
+                        setCustomTime("");
+                        onDelete();
+                        setCustomOpen(false);
+                      }}
+                      aria-label="Clear timer"
+                    >
+                      <X className="size-6" strokeWidth={2.4} />
+                    </button>
+                  ) : null}
+                  <button
+                    className="grid size-14 place-items-center rounded-full bg-white text-[var(--mode-accent)] shadow-sm shadow-slate-900/8 transition active:scale-95 disabled:text-slate-300 disabled:shadow-none dark:border dark:border-white/10 dark:bg-slate-900/80 dark:disabled:text-slate-600 dark:shadow-black/24"
+                    type="button"
+                    disabled={disabled || !isTimeValue(customTime)}
+                    onClick={confirmCustomTime}
+                    aria-label="Confirm time"
+                  >
+                    <Check className="size-6" strokeWidth={2.6} />
+                  </button>
+                </div>
+              </div>
+            </label>
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+    </div>
+  );
+}
+
+function TimerActionButton({ label, icon, minutes, runAt, presetMinutes, action, selected = false, disabled, onClick }) {
+  const iconClassName =
+    icon && selected
+      ? "grid size-12 place-items-center rounded-full bg-[var(--mode-accent)] text-white opacity-100 shadow-sm shadow-sky-500/24 transition duration-200 ease-out"
+      : `grid size-12 place-items-center rounded-full bg-white/18 text-slate-700 transition duration-200 ease-out dark:bg-slate-950/48 dark:text-slate-200 ${selected ? "opacity-100" : "opacity-75"}`;
+
+  return (
+    <button
+      className={`grid min-w-0 justify-items-center gap-2 text-xs font-bold transition focus:outline-none disabled:opacity-45 ${selected ? "text-slate-950 dark:text-white" : "text-slate-600/70 dark:text-slate-300/70"}`}
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={selected}
+    >
+      <span className={iconClassName}>
+        {icon || <TimerPieIcon minutes={minutes} runAt={runAt} presetMinutes={presetMinutes} action={action} selected={selected} />}
+      </span>
+      <span className="max-w-16 truncate">{label}</span>
+    </button>
+  );
+}
+
+function TimerPieIcon({ minutes, runAt, presetMinutes, action, selected }) {
+  const now = new Date();
+  const startMinutes = now.getHours() * 60 + now.getMinutes();
+  const startAngle = (startMinutes / (24 * 60)) * 360 - 90;
+  const targetDate = getTimerIconTargetDate(runAt, minutes, now);
+  const targetMinutes = targetDate.getHours() * 60 + targetDate.getMinutes();
+  const targetClockAngle = (targetMinutes / (24 * 60)) * 360 - 90;
+  const remainingMinutes = Math.max(0, (targetDate.getTime() - now.getTime()) / 60_000);
+  const offStartAngle = getTimerStartAngle({ now, targetDate, presetMinutes, fallbackStartAngle: startAngle });
+  const offEndAngle = runAt && presetMinutes ? offStartAngle + (presetMinutes / (24 * 60)) * 360 : startAngle + (remainingMinutes / (24 * 60)) * 360;
+  const offPath = describePieSlice(32, 32, 31, offStartAngle, offEndAngle);
+  const onStartAngle = getTimerStartAngle({ now, targetDate, presetMinutes, fallbackStartAngle: startAngle });
+  const onEndAngle = runAt && presetMinutes ? onStartAngle + (presetMinutes / (24 * 60)) * 360 : startAngle + (remainingMinutes / (24 * 60)) * 360;
+  const onActivePath = describePieSlice(32, 32, 31, onEndAngle, onStartAngle + 360);
+  const timerIdleFill = "var(--timer-idle-fill)";
+  const timerActiveFill = "var(--timer-active-fill)";
+  const timerSelectedFill = "var(--mode-accent)";
+  const idleFill = timerIdleFill;
+  const activeFill = selected ? timerSelectedFill : timerActiveFill;
+  const offHandAngle = runAt ? startAngle : offStartAngle;
+  const onHandAngle = startAngle;
+  const handAngle = action === "on" ? onHandAngle : offHandAngle;
+  const handEnd = polarToCartesian(32, 32, 20, handAngle);
+
+  return (
+    <svg className="size-12" viewBox="0 0 64 64" aria-hidden="true">
+      <circle cx="32" cy="32" r="31" fill={idleFill} />
+      {action === "on" ? (
+        <>
+          <path d={onActivePath} fill={activeFill} />
+        </>
+      ) : (
+        <path d={offPath} fill={activeFill} />
+      )}
+      <line className="stroke-slate-700 dark:stroke-white/90" x1="32" y1="32" x2={handEnd.x} y2={handEnd.y} strokeWidth="2.4" strokeLinecap="round" />
+      <circle className="fill-slate-700 dark:fill-white/90" cx="32" cy="32" r="3.2" />
+    </svg>
   );
 }
 
@@ -348,6 +573,126 @@ function getFanShortLabel(option) {
   };
 
   return labels[option.value] || option.label;
+}
+
+function toTimeValue(runAt) {
+  if (!runAt) return "";
+  const date = new Date(runAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return formatTimeValue(date);
+}
+
+function formatOffsetTimeValue(minutes) {
+  return formatTimeValue(new Date(Date.now() + minutes * 60_000));
+}
+
+function resolveOffsetRunAt(minutes) {
+  return new Date(Date.now() + minutes * 60_000).toISOString();
+}
+
+function getSelectedQuickMinutes(timer, quickTimerOptions) {
+  if (!timer) return undefined;
+  if (timer.presetMinutes) return timer.presetMinutes;
+
+  const target = new Date(timer.runAt).getTime();
+  if (Number.isNaN(target)) return undefined;
+
+  const remainingMinutes = Math.max(0, (target - Date.now()) / 60_000);
+  const matchingOption = quickTimerOptions.find((option) => Math.abs(remainingMinutes - option.minutes) <= 2);
+  return matchingOption?.minutes ?? null;
+}
+
+function getTimerIconTargetDate(runAt, minutes, now) {
+  if (runAt) {
+    const date = new Date(runAt);
+    if (!Number.isNaN(date.getTime())) return date;
+  }
+
+  return new Date(now.getTime() + minutes * 60_000);
+}
+
+function getTimerStartAngle({ now, targetDate, presetMinutes, fallbackStartAngle }) {
+  if (!presetMinutes) return fallbackStartAngle;
+
+  const originalStart = new Date(targetDate.getTime() - presetMinutes * 60_000);
+  const originalStartMinutes = originalStart.getHours() * 60 + originalStart.getMinutes();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  let startAngle = (originalStartMinutes / (24 * 60)) * 360 - 90;
+  const nowAngle = (nowMinutes / (24 * 60)) * 360 - 90;
+
+  while (startAngle > nowAngle) {
+    startAngle -= 360;
+  }
+
+  return startAngle;
+}
+
+function getTimerStatusText(action, runAt, displayedSelection) {
+  if (displayedSelection === "none") return "";
+  const actionVerb = action === "on" ? "Start" : "Stop";
+
+  if (runAt) {
+    const target = new Date(runAt);
+    if (Number.isNaN(target.getTime())) return "";
+
+    return `${actionVerb}${formatTimerStatusSuffix(target)}`;
+  }
+
+  if (typeof displayedSelection === "number") {
+    return `${actionVerb} at ${formatOffsetTimeValue(displayedSelection)}`;
+  }
+
+  return "";
+}
+
+function describePieSlice(cx, cy, radius, startAngle, endAngle, sweep = 1) {
+  const start = polarToCartesian(cx, cy, radius, startAngle);
+  const end = polarToCartesian(cx, cy, radius, endAngle);
+  const delta = Math.abs(endAngle - startAngle);
+  const largeArcFlag = delta > 180 ? 1 : 0;
+
+  return [`M ${cx} ${cy}`, `L ${start.x} ${start.y}`, `A ${radius} ${radius} 0 ${largeArcFlag} ${sweep} ${end.x} ${end.y}`, "Z"].join(" ");
+}
+
+function polarToCartesian(cx, cy, radius, angle) {
+  const radians = (angle * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians)
+  };
+}
+
+function formatTimeValue(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function formatTimerStatusSuffix(date) {
+  return isSameLocalDate(date, new Date()) ? ` at ${formatTimeValue(date)}` : ` tomorrow at ${formatTimeValue(date)}`;
+}
+
+function isSameLocalDate(left, right) {
+  return left.getFullYear() === right.getFullYear() && left.getMonth() === right.getMonth() && left.getDate() === right.getDate();
+}
+
+function resolveFutureRunAt(value) {
+  if (!isTimeValue(value)) return "";
+
+  const [hours, minutes] = value.split(":").map(Number);
+  const now = new Date();
+  const runAt = new Date(now);
+  runAt.setHours(hours, minutes, 0, 0);
+
+  if (runAt.getTime() <= now.getTime()) {
+    runAt.setDate(runAt.getDate() + 1);
+  }
+
+  return runAt.toISOString();
+}
+
+function isTimeValue(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
 function getModeTheme(mode) {

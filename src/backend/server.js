@@ -7,6 +7,8 @@ import { AliasStore } from "./aliasStore.js";
 import { AutomationRunner } from "./automationRunner.js";
 import { AutomationStore } from "./automationStore.js";
 import { fans, HvacClient, modes } from "./hvacClient.js";
+import { UnitTimerRunner } from "./unitTimerRunner.js";
+import { UnitTimerStore } from "./unitTimerStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distDir = path.resolve(__dirname, "../../dist");
@@ -14,6 +16,8 @@ const client = new HvacClient(config);
 const aliases = new AliasStore();
 const automations = new AutomationStore();
 const automationRunner = new AutomationRunner({ store: automations, client });
+const unitTimers = new UnitTimerStore();
+const unitTimerRunner = new UnitTimerRunner({ store: unitTimers, client });
 const app = express();
 
 app.disable("x-powered-by");
@@ -39,6 +43,20 @@ app.patch("/api/units/:idx", async (req, res) => {
 
 app.put("/api/units/:idx/alias", async (req, res) => {
   const result = await aliases.set(Number(req.params.idx), req.body?.alias);
+  res.json(result);
+});
+
+app.get("/api/unit-timers", async (_req, res) => {
+  res.json({ timers: await unitTimers.list() });
+});
+
+app.put("/api/units/:idx/timers/:action", async (req, res) => {
+  const timer = await unitTimers.set(Number(req.params.idx), req.params.action, req.body?.runAt, req.body?.presetMinutes);
+  res.json({ timer });
+});
+
+app.delete("/api/units/:idx/timers/:action", async (req, res) => {
+  const result = await unitTimers.delete(Number(req.params.idx), req.params.action);
   res.json(result);
 });
 
@@ -83,6 +101,7 @@ app.listen(config.listenPort, config.listenHost, () => {
   console.log(`HVAC gateway UI listening on http://${config.listenHost}:${config.listenPort}`);
   console.log(`Target BroadLink gateway: ${config.host}:${config.port}`);
   automationRunner.start();
+  unitTimerRunner.start();
 });
 
 function requireAccessToken(req, res, next) {

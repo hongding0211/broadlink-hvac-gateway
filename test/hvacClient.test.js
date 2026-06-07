@@ -7,6 +7,8 @@ import { AliasStore } from "../src/backend/aliasStore.js";
 import { AutomationRunner } from "../src/backend/automationRunner.js";
 import { AutomationStore } from "../src/backend/automationStore.js";
 import { buildControlCommand, normalizeUnit, parseDeviceJson } from "../src/backend/hvacClient.js";
+import { UnitTimerRunner } from "../src/backend/unitTimerRunner.js";
+import { UnitTimerStore } from "../src/backend/unitTimerStore.js";
 
 const rawUnit = {
   idx: 1,
@@ -243,4 +245,65 @@ test("runs due automations once per matching day and minute", async () => {
       }
     }
   ]);
+});
+
+test("stores one unit timer per action", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-unit-timer-"));
+  try {
+    const store = new UnitTimerStore(dir);
+
+    await store.set(2, "off", "2026-06-08T02:00:00.000Z", 240);
+    await store.set(2, "off", "2026-06-08T03:00:00.000Z", 240);
+    await store.set(2, "on", "2026-06-08T08:00:00.000Z");
+
+    const timers = await store.list();
+    assert.equal(timers.length, 2);
+    assert.deepEqual(
+      timers.map((timer) => [timer.unitIdx, timer.action, timer.runAt]),
+      [
+        [2, "off", "2026-06-08T03:00:00.000Z"],
+        [2, "on", "2026-06-08T08:00:00.000Z"]
+      ]
+    );
+    assert.equal(timers[0].presetMinutes, 240);
+    assert.equal(timers[1].presetMinutes, undefined);
+
+    await store.delete(2, "off");
+    assert.deepEqual(
+      (await store.list()).map((timer) => timer.action),
+      ["on"]
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runs due unit timers and removes them", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-unit-timer-runner-"));
+  try {
+    const updates = [];
+    const store = new UnitTimerStore(dir);
+    await store.set(3, "off", "2026-06-08T02:00:00.000Z");
+    await store.set(4, "on", "2026-06-08T08:00:00.000Z");
+
+    const runner = new UnitTimerRunner({
+      store,
+      client: {
+        async updateUnit(idx, patch) {
+          updates.push({ idx, patch });
+        }
+      },
+      now: () => new Date("2026-06-08T03:00:00.000Z")
+    });
+
+    await runner.runDueTimers();
+
+    assert.deepEqual(updates, [{ idx: 3, patch: { on: 0 } }]);
+    assert.deepEqual(
+      (await store.list()).map((timer) => [timer.unitIdx, timer.action]),
+      [[4, "on"]]
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

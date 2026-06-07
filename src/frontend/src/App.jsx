@@ -14,6 +14,7 @@ export function App() {
   const [fans, setFans] = useState([]);
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [syncingUnits, setSyncingUnits] = useState(0);
+  const [unitTimers, setUnitTimers] = useState([]);
   const [message, setMessage] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [aliasBusy, setAliasBusy] = useState(false);
@@ -27,6 +28,18 @@ export function App() {
     () => units.find((unit) => unit.idx === selectedIdx) || null,
     [selectedIdx, units]
   );
+  const unitTimersByIdx = useMemo(() => {
+    const timersByIdx = new Map();
+    for (const timer of unitTimers) {
+      const timers = timersByIdx.get(timer.unitIdx) || [];
+      timers.push(timer);
+      timersByIdx.set(timer.unitIdx, timers);
+    }
+    for (const timers of timersByIdx.values()) {
+      timers.sort((left, right) => left.runAt.localeCompare(right.runAt));
+    }
+    return timersByIdx;
+  }, [unitTimers]);
 
   useEffect(() => {
     async function boot() {
@@ -34,7 +47,7 @@ export function App() {
         const options = await api("/api/options");
         setModes(options.modes);
         setFans(options.fans);
-        await loadUnits();
+        await Promise.all([loadUnits(), loadUnitTimers()]);
       } catch (error) {
         setMessage(error.message);
       }
@@ -84,6 +97,7 @@ export function App() {
 
       try {
         const payload = await api("/api/units");
+        const timerPayload = await api("/api/unit-timers");
         setUnits((currentUnits) =>
           mergePolledUnits(
             currentUnits,
@@ -94,6 +108,7 @@ export function App() {
             Date.now()
           )
         );
+        setUnitTimers(timerPayload.timers);
         setMessage("");
       } catch (error) {
         setMessage(error.message);
@@ -131,6 +146,15 @@ export function App() {
       } else {
         setSyncingUnits((count) => Math.max(0, count - 1));
       }
+    }
+  }
+
+  async function loadUnitTimers() {
+    try {
+      const payload = await api("/api/unit-timers");
+      setUnitTimers(payload.timers);
+    } catch (error) {
+      setMessage(error.message);
     }
   }
 
@@ -225,6 +249,41 @@ export function App() {
     }
   }
 
+  async function saveUnitTimer(unitIdx, action, localValue, presetMinutes = null) {
+    const runAt = new Date(localValue);
+    if (Number.isNaN(runAt.getTime())) {
+      setMessage("Timer time is invalid");
+      return;
+    }
+
+    try {
+      const payload = await api(`/api/units/${unitIdx}/timers/${action}`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ runAt: runAt.toISOString(), presetMinutes })
+      });
+      setUnitTimers((currentTimers) => [
+        ...currentTimers.filter((timer) => timer.unitIdx !== unitIdx || timer.action !== action),
+        payload.timer
+      ]);
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function deleteUnitTimer(unitIdx, action) {
+    try {
+      await api(`/api/units/${unitIdx}/timers/${action}`, { method: "DELETE" });
+      setUnitTimers((currentTimers) =>
+        currentTimers.filter((timer) => timer.unitIdx !== unitIdx || timer.action !== action)
+      );
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
   return (
     <main className="relative z-10 mx-auto min-h-dvh w-full max-w-5xl px-4 pb-[calc(92px+env(safe-area-inset-bottom))] pt-[max(22px,env(safe-area-inset-top))] sm:px-6">
       <header className="flex min-h-24 items-center justify-between gap-4">
@@ -238,7 +297,7 @@ export function App() {
           <button
             className="grid size-12 place-items-center rounded-full bg-white/12 text-slate-950 shadow-sm shadow-slate-900/5 backdrop-blur-xl transition hover:bg-white/20 focus:outline-none disabled:opacity-50 dark:bg-slate-950/42 dark:text-white dark:shadow-black/25 dark:hover:bg-slate-950/56"
             type="button"
-            onClick={() => loadUnits()}
+            onClick={() => loadUnits({ hideContent: false })}
             disabled={loadingUnits}
             aria-label="Refresh"
           >
@@ -262,7 +321,7 @@ export function App() {
           ) : null}
           {!loadingUnits
             ? units.map((unit) => (
-                <UnitCard key={unit.idx} unit={unit} onOpen={() => setSelectedIdx(unit.idx)} />
+                <UnitCard key={unit.idx} unit={unit} timers={unitTimersByIdx.get(unit.idx) || []} onOpen={() => setSelectedIdx(unit.idx)} />
               ))
             : null}
         </section>
@@ -277,6 +336,9 @@ export function App() {
         busy={aliasBusy}
         onClose={() => setSelectedIdx(null)}
         onSaveAlias={saveAlias}
+        timers={selectedUnit ? unitTimersByIdx.get(selectedUnit.idx) || [] : []}
+        onSaveTimer={saveUnitTimer}
+        onDeleteTimer={deleteUnitTimer}
         onUpdate={updateSelected}
       />
 

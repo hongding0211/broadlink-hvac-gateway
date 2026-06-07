@@ -1,7 +1,9 @@
 import { getCardState, getDisplayName } from "../lib/hvac.js";
 
-export function UnitCard({ unit, onOpen }) {
+export function UnitCard({ unit, timers = [], onOpen }) {
   const state = getCardState(unit);
+  const nextTimer = getNextTimer(timers);
+  const statusText = nextTimer ? formatTimerStatus(nextTimer) : unit.on === 1 ? `Set ${unit.tempSet}° · ${unit.modeLabel} · ${unit.fanLabel}` : "Off";
 
   return (
     <button className={cardClassName(state)} type="button" onClick={onOpen}>
@@ -15,11 +17,31 @@ export function UnitCard({ unit, onOpen }) {
         </span>
         <span className="text-left text-5xl font-bold leading-none text-slate-950 dark:text-white">{unit.tempIn}°</span>
         <span className="truncate text-left text-sm font-semibold text-slate-600/75 dark:text-slate-200/75">
-          {unit.on === 1 ? `Set ${unit.tempSet}° · ${unit.modeLabel} · ${unit.fanLabel}` : "Off"}
+          {statusText}
         </span>
       </span>
     </button>
   );
+}
+
+function getNextTimer(timers) {
+  const now = Date.now();
+  return timers
+    .filter((timer) => new Date(timer.runAt).getTime() > now)
+    .sort((left, right) => new Date(left.runAt).getTime() - new Date(right.runAt).getTime())[0];
+}
+
+function formatTimerStatus(timer) {
+  const actionLabel = timer.action === "on" ? "Start at" : "Stop at";
+  const date = new Date(timer.runAt);
+  if (Number.isNaN(date.getTime())) return actionLabel;
+  return `${actionLabel} ${formatTime(date)}`;
+}
+
+function formatTime(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
 }
 
 function cardClassName(state) {

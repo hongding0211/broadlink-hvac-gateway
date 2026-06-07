@@ -13,6 +13,8 @@
     min-height: 100%;
     color-scheme: light dark;
     background: #dbe9ef;
+    --timer-idle-fill: rgba(255, 255, 255, 0.36);
+    --timer-active-fill: rgba(100, 116, 139, 0.12);
   }
 
   body {
@@ -39,6 +41,8 @@
   @media (prefers-color-scheme: dark) {
     html {
       background: #020814;
+      --timer-idle-fill: rgba(15, 23, 42, 0.48);
+      --timer-active-fill: rgba(148, 163, 184, 0.14);
     }
 
     body {
@@ -61,6 +65,14 @@
     font: inherit;
   }
 
+  .timer-sheet-time-input::-webkit-calendar-picker-indicator {
+    display: none;
+  }
+
+  .timer-sheet-time-input {
+    appearance: textfield;
+    -webkit-appearance: none;
+  }
 }
 
 @utility overflow-wrap-anywhere {
