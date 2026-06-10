@@ -45,6 +45,8 @@
   }
 
   #root {
+    position: relative;
+    z-index: 2;
     width: 100%;
     height: var(--app-height, 100dvh);
     overflow: hidden;
