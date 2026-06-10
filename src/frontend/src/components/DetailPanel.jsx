@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { getDisplayName, getStateName } from "../lib/hvac.js";
 
-export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onSaveAlias, onUpdate, onSaveTimer, onDeleteTimer }) {
+export function DetailPanel({ unit, modes, fans, busy, preference = {}, timers = [], onClose, onSaveAlias, onUpdate, onUpdatePreference, onUpdateTimerPatch, onSaveTimer, onDeleteTimer }) {
   const closeTimerRef = useRef(null);
   const [displayedUnit, setDisplayedUnit] = useState(unit);
   const [editingAlias, setEditingAlias] = useState(false);
@@ -54,7 +54,9 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
   if (!activeUnit) return null;
 
   const panelDisabled = busy;
-  const controlsDisabled = panelDisabled || activeUnit.on !== 1;
+  const editingPreference = activeUnit.on !== 1;
+  const controlUnit = editingPreference ? applyPreferencePatch(activeUnit, preference, modes, fans) : activeUnit;
+  const controlsDisabled = panelDisabled;
   const powerDisabled = panelDisabled || activeUnit.OnoffLock === 1;
   const modeDisabled = controlsDisabled || activeUnit.modeLock === 1;
   const tempLocked = activeUnit.tempLock === 1;
@@ -62,10 +64,12 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
   const maxTemp = tempLocked ? activeUnit.highestVal || 32 : 32;
   const tempDisabled = controlsDisabled || minTemp >= maxTemp;
   const statusLine =
-    activeUnit.on === 1
+    editingPreference
+      ? `${getStateName(activeUnit)} · Next ${controlUnit.tempSet}° · ${controlUnit.modeLabel} · ${controlUnit.fanLabel}`
+      : activeUnit.on === 1
       ? `${getStateName(activeUnit)} · Room ${activeUnit.tempIn}° · ${activeUnit.modeLabel}`
       : `${getStateName(activeUnit)} · Room ${activeUnit.tempIn}°`;
-  const theme = getModeTheme(activeUnit.mode);
+  const theme = getModeTheme(controlUnit.mode);
 
   async function submitAlias(event) {
     event.preventDefault();
@@ -80,7 +84,32 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
     }
 
     const hasAutoFan = fans.some((option) => option.value === 0);
-    onUpdate(hasAutoFan ? { on: 1, fan: 0 } : { on: 1 });
+    const startPatch = {
+      on: 1,
+      mode: controlUnit.mode,
+      tempSet: controlUnit.tempSet,
+      fan: controlUnit.fan
+    };
+    onUpdate(hasAutoFan && !Object.hasOwn(preference, "fan") ? { ...startPatch, fan: 0 } : startPatch);
+  }
+
+  function updateControl(patch) {
+    if (editingPreference) {
+      onUpdatePreference(activeUnit.idx, patch);
+      return;
+    }
+
+    onUpdate(patch);
+  }
+
+  function getDefaultOnTimerPatch() {
+    const hasAutoFan = fans.some((option) => option.value === 0);
+    return {
+      on: 1,
+      mode: controlUnit.mode,
+      tempSet: controlUnit.tempSet,
+      fan: Object.hasOwn(preference, "fan") || activeUnit.on === 1 ? controlUnit.fan : hasAutoFan ? 0 : controlUnit.fan
+    };
   }
 
   return (
@@ -143,22 +172,22 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
 
           <section className="mt-5 overflow-hidden rounded-[30px] bg-white/16 p-4 shadow-inner shadow-white/20 backdrop-blur-xl dark:bg-slate-950/42 dark:shadow-white/5">
             <div className="relative mx-auto grid min-h-64 w-full max-w-[430px] grid-cols-[56px_1fr_56px] items-end gap-4 pb-3">
-              <TemperatureDial unit={activeUnit} minTemp={minTemp} maxTemp={maxTemp} theme={theme} />
+              <TemperatureDial unit={controlUnit} minTemp={minTemp} maxTemp={maxTemp} theme={theme} />
               <StepButton
                 label="Decrease temperature"
                 icon={<Minus className="size-5" />}
-                disabled={tempDisabled || activeUnit.tempSet <= minTemp}
-                onClick={() => onUpdate({ tempSet: Math.max(minTemp, activeUnit.tempSet - 1) })}
+                disabled={tempDisabled || controlUnit.tempSet <= minTemp}
+                onClick={() => updateControl({ tempSet: Math.max(minTemp, controlUnit.tempSet - 1) })}
               />
               <div className="relative z-10 grid justify-items-center gap-1">
-                <strong className="text-7xl font-bold leading-none tracking-normal text-slate-950 dark:text-white">{activeUnit.tempSet}°</strong>
-                <span className="text-sm font-bold text-slate-600/70 dark:text-slate-300/70">Target</span>
+                <strong className="text-7xl font-bold leading-none tracking-normal text-slate-950 dark:text-white">{controlUnit.tempSet}°</strong>
+                <span className="text-sm font-bold text-slate-600/70 dark:text-slate-300/70">{editingPreference ? "Next target" : "Target"}</span>
               </div>
               <StepButton
                 label="Increase temperature"
                 icon={<Plus className="size-5" />}
-                disabled={tempDisabled || activeUnit.tempSet >= maxTemp}
-                onClick={() => onUpdate({ tempSet: Math.min(maxTemp, activeUnit.tempSet + 1) })}
+                disabled={tempDisabled || controlUnit.tempSet >= maxTemp}
+                onClick={() => updateControl({ tempSet: Math.min(maxTemp, controlUnit.tempSet + 1) })}
               />
             </div>
           </section>
@@ -171,23 +200,23 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
           <section className="mt-3 grid gap-3">
             <OptionRail
               label="Mode"
-              value={activeUnit.mode}
+              value={controlUnit.mode}
               options={getPrimaryModeOptions(modes)}
               disabled={modeDisabled}
               iconFor={getModeIcon}
               shortLabelFor={getModeShortLabel}
-              isSelected={(optionValue) => getPrimaryModeKey(optionValue) === getPrimaryModeKey(activeUnit.mode)}
-              onChange={(value) => onUpdate({ mode: value })}
+              isSelected={(optionValue) => getPrimaryModeKey(optionValue) === getPrimaryModeKey(controlUnit.mode)}
+              onChange={(value) => updateControl({ mode: value })}
             />
             <OptionRail
               label="Fan"
-              value={activeUnit.fan}
+              value={controlUnit.fan}
               options={fans}
               disabled={controlsDisabled}
               iconFor={getFanIcon}
               shortLabelFor={getFanShortLabel}
-              isSelected={(optionValue) => optionValue === activeUnit.fan}
-              onChange={(value) => onUpdate({ fan: value })}
+              isSelected={(optionValue) => optionValue === controlUnit.fan}
+              onChange={(value) => updateControl({ fan: value })}
             />
           </section>
 
@@ -207,7 +236,8 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
                 action="on"
                 timer={onTimer}
                 disabled={panelDisabled}
-                onSchedule={(runAt, presetMinutes) => onSaveTimer(activeUnit.idx, "on", runAt, presetMinutes)}
+                schedulePatch={getDefaultOnTimerPatch()}
+                onSchedule={(runAt, presetMinutes, patch) => onSaveTimer(activeUnit.idx, "on", runAt, presetMinutes, patch)}
                 onDelete={() => onDeleteTimer(activeUnit.idx, "on")}
               />
             </div>
@@ -222,9 +252,13 @@ export function DetailPanel({ unit, modes, fans, busy, timers = [], onClose, onS
 
 const quickTimerOptionsByAction = {
   off: [
+    { label: "30m", minutes: 30 },
     { label: "1h", minutes: 60 },
     { label: "2h", minutes: 120 },
-    { label: "4h", minutes: 240 }
+    { label: "3h", minutes: 180 },
+    { label: "4h", minutes: 240 },
+    { label: "6h", minutes: 360 },
+    { label: "8h", minutes: 480 }
   ],
   on: [
     { label: "30m", minutes: 30 },
@@ -233,7 +267,7 @@ const quickTimerOptionsByAction = {
   ]
 };
 
-function TimerRow({ label, action, timer, disabled, onSchedule, onDelete }) {
+function TimerRow({ label, action, timer, disabled, schedulePatch, onSchedule, onDelete }) {
   const [customOpen, setCustomOpen] = useState(false);
   const [customTime, setCustomTime] = useState("");
   const [optimisticTimer, setOptimisticTimer] = useState(undefined);
@@ -255,7 +289,7 @@ function TimerRow({ label, action, timer, disabled, onSchedule, onDelete }) {
 
     const runAt = resolveFutureRunAt(customTime);
     setOptimisticTimer({ selection: "more", runAt });
-    onSchedule(runAt);
+    onSchedule(runAt, null, schedulePatch);
     setCustomOpen(false);
   }
 
@@ -285,7 +319,7 @@ function TimerRow({ label, action, timer, disabled, onSchedule, onDelete }) {
 
               const runAt = resolveOffsetRunAt(option.minutes);
               setOptimisticTimer({ selection: option.minutes, runAt, presetMinutes: option.minutes });
-              onSchedule(runAt, option.minutes);
+              onSchedule(runAt, option.minutes, schedulePatch);
             }}
           />
         ))}
@@ -309,15 +343,24 @@ function TimerRow({ label, action, timer, disabled, onSchedule, onDelete }) {
             <label className="mt-5 grid gap-2">
               <span className="text-xs font-bold uppercase tracking-[0.08em] text-slate-500 dark:text-slate-400">Time</span>
               <div className="grid grid-cols-[1fr_auto] items-center gap-3">
-                <input
-                  className="timer-sheet-time-input min-h-16 rounded-[24px] bg-white px-4 text-center text-4xl font-bold tracking-normal text-slate-950 outline-none shadow-sm shadow-slate-900/8 dark:border dark:border-white/10 dark:bg-slate-900/80 dark:text-white dark:shadow-black/24"
-                  type="time"
-                  step="60"
-                  value={customTime}
-                  onInput={(event) => setCustomTime(event.currentTarget.value)}
-                  onChange={(event) => setCustomTime(event.currentTarget.value)}
-                  disabled={disabled}
-                />
+                <span className="relative grid min-w-0">
+                  <span
+                    className={`pointer-events-none absolute inset-0 grid place-items-center text-4xl font-bold tracking-normal text-slate-500/32 dark:text-white/24 ${customTime ? "opacity-0" : "opacity-100"}`}
+                    aria-hidden="true"
+                  >
+                    --:--
+                  </span>
+                  <input
+                    className="timer-sheet-time-input min-h-16 rounded-[24px] bg-white px-4 text-center text-4xl font-bold tracking-normal text-slate-950 outline-none shadow-sm shadow-slate-900/8 dark:border dark:border-white/10 dark:bg-slate-900/80 dark:text-white dark:shadow-black/24"
+                    type="time"
+                    step="60"
+                    value={customTime}
+                    onInput={(event) => setCustomTime(event.currentTarget.value)}
+                    onChange={(event) => setCustomTime(event.currentTarget.value)}
+                    disabled={disabled}
+                    aria-label="Timer time"
+                  />
+                </span>
                 <div className="flex items-center gap-2">
                   {timer ? (
                     <button
@@ -575,6 +618,28 @@ function getFanShortLabel(option) {
   return labels[option.value] || option.label;
 }
 
+function applyPreferencePatch(unit, preference, modes, fans) {
+  const patch = preference || {};
+  const nextUnit = { ...unit, ...patch };
+
+  if (unit.on !== 1 && !Object.hasOwn(patch, "fan") && fans.some((item) => item.value === 0)) {
+    nextUnit.fan = 0;
+    nextUnit.fanLabel = fans.find((item) => item.value === 0)?.label || "Auto";
+  }
+
+  if (Object.hasOwn(patch, "mode")) {
+    const option = modes.find((item) => item.value === Number(patch.mode));
+    nextUnit.modeLabel = option?.label || `Mode ${patch.mode}`;
+  }
+
+  if (Object.hasOwn(patch, "fan")) {
+    const option = fans.find((item) => item.value === Number(patch.fan));
+    nextUnit.fanLabel = option?.label || `Fan ${patch.fan}`;
+  }
+
+  return nextUnit;
+}
+
 function toTimeValue(runAt) {
   if (!runAt) return "";
   const date = new Date(runAt);
@@ -698,10 +763,10 @@ function isTimeValue(value) {
 function getModeTheme(mode) {
   const themes = {
     1: modeTheme("#38bdf8", "#0284c7", "rgba(56, 189, 248, 0.24)"), // Cooling
-    2: modeTheme("#fbbf24", "#d97706", "rgba(251, 191, 36, 0.22)"), // Dehumidify
-    3: modeTheme("#fbbf24", "#d97706", "rgba(251, 191, 36, 0.22)"), // Comfort Dry
+    2: modeTheme("#2dd4bf", "#0f766e", "rgba(45, 212, 191, 0.22)"), // Dehumidify
+    3: modeTheme("#2dd4bf", "#0f766e", "rgba(45, 212, 191, 0.22)"), // Comfort Dry
     4: modeTheme("#22d3ee", "#0891b2", "rgba(34, 211, 238, 0.22)"), // Fresh Air
-    5: modeTheme("#fbbf24", "#d97706", "rgba(251, 191, 36, 0.22)"), // Auto Dehumidify
+    5: modeTheme("#2dd4bf", "#0f766e", "rgba(45, 212, 191, 0.22)"), // Auto Dehumidify
     6: modeTheme("#a78bfa", "#7c3aed", "rgba(167, 139, 250, 0.24)"), // Sleep
     8: modeTheme("#fb923c", "#ea580c", "rgba(251, 146, 60, 0.24)"), // Heating
     9: modeTheme("#fb923c", "#ea580c", "rgba(251, 146, 60, 0.24)"), // Floor Heating

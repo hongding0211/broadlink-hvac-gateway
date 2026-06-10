@@ -7,6 +7,8 @@ import { AliasStore } from "./aliasStore.js";
 import { AutomationRunner } from "./automationRunner.js";
 import { AutomationStore } from "./automationStore.js";
 import { fans, HvacClient, modes } from "./hvacClient.js";
+import { UnitOrderStore } from "./unitOrderStore.js";
+import { pickPreferencePatch, UnitPreferenceStore } from "./unitPreferenceStore.js";
 import { UnitTimerRunner } from "./unitTimerRunner.js";
 import { UnitTimerStore } from "./unitTimerStore.js";
 
@@ -17,7 +19,9 @@ const aliases = new AliasStore();
 const automations = new AutomationStore();
 const automationRunner = new AutomationRunner({ store: automations, client });
 const unitTimers = new UnitTimerStore();
-const unitTimerRunner = new UnitTimerRunner({ store: unitTimers, client });
+const unitPreferences = new UnitPreferenceStore();
+const unitOrder = new UnitOrderStore();
+const unitTimerRunner = new UnitTimerRunner({ store: unitTimers, client, preferences: unitPreferences });
 const app = express();
 
 app.disable("x-powered-by");
@@ -33,12 +37,34 @@ app.get("/api/options", (_req, res) => {
 });
 
 app.get("/api/units", async (_req, res) => {
-  res.json({ units: await aliases.apply(await client.readUnits()) });
+  res.json({ units: await unitOrder.apply(await aliases.apply(await client.readUnits())) });
 });
 
 app.patch("/api/units/:idx", async (req, res) => {
   const result = await client.updateUnit(Number(req.params.idx), req.body || {});
+  const preferencePatch = pickPreferencePatch(req.body || {});
+  if (Object.keys(preferencePatch).length > 0) {
+    await unitPreferences.setPatch(Number(req.params.idx), preferencePatch);
+  }
   res.json(result);
+});
+
+app.get("/api/unit-preferences", async (_req, res) => {
+  res.json({ preferences: await unitPreferences.list() });
+});
+
+app.patch("/api/units/:idx/preferences", async (req, res) => {
+  const preference = await unitPreferences.setPatch(Number(req.params.idx), req.body || {});
+  res.json({ preference });
+});
+
+app.get("/api/unit-order", async (_req, res) => {
+  res.json({ order: await unitOrder.get() });
+});
+
+app.put("/api/unit-order", async (req, res) => {
+  const order = await unitOrder.set(req.body?.order);
+  res.json({ order });
 });
 
 app.put("/api/units/:idx/alias", async (req, res) => {
@@ -51,7 +77,7 @@ app.get("/api/unit-timers", async (_req, res) => {
 });
 
 app.put("/api/units/:idx/timers/:action", async (req, res) => {
-  const timer = await unitTimers.set(Number(req.params.idx), req.params.action, req.body?.runAt, req.body?.presetMinutes);
+  const timer = await unitTimers.set(Number(req.params.idx), req.params.action, req.body?.runAt, req.body?.presetMinutes, req.body?.patch);
   res.json({ timer });
 });
 

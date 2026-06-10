@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarClock, House, RefreshCw } from "lucide-react";
+import { CalendarClock, Check, House, RefreshCw } from "lucide-react";
 import { AutomationTab } from "./components/AutomationTab.jsx";
 import { DetailPanel } from "./components/DetailPanel.jsx";
 import { UnitCard } from "./components/UnitCard.jsx";
@@ -15,14 +15,22 @@ export function App() {
   const [loadingUnits, setLoadingUnits] = useState(false);
   const [syncingUnits, setSyncingUnits] = useState(0);
   const [unitTimers, setUnitTimers] = useState([]);
+  const [unitPreferences, setUnitPreferences] = useState([]);
   const [message, setMessage] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [aliasBusy, setAliasBusy] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
+  const [reorderMode, setReorderMode] = useState(false);
+  const [draggingIdx, setDraggingIdx] = useState(null);
   const desiredPatchesRef = useRef(new Map());
   const inFlightUnitsRef = useRef(new Set());
   const optimisticUntilRef = useRef(new Map());
   const pollingUnitsRef = useRef(false);
+  const unitsRef = useRef([]);
+  const reorderModeRef = useRef(false);
+  const draggingIdxRef = useRef(null);
+  const reorderDirtyRef = useRef(false);
+  const longPressRef = useRef(null);
 
   const selectedUnit = useMemo(
     () => units.find((unit) => unit.idx === selectedIdx) || null,
@@ -40,6 +48,10 @@ export function App() {
     }
     return timersByIdx;
   }, [unitTimers]);
+  const unitPreferencesByIdx = useMemo(
+    () => new Map(unitPreferences.map((preference) => [preference.unitIdx, preference.patch || {}])),
+    [unitPreferences]
+  );
 
   useEffect(() => {
     async function boot() {
@@ -47,13 +59,30 @@ export function App() {
         const options = await api("/api/options");
         setModes(options.modes);
         setFans(options.fans);
-        await Promise.all([loadUnits(), loadUnitTimers()]);
+        await Promise.all([loadUnits(), loadUnitTimers(), loadUnitPreferences()]);
       } catch (error) {
         setMessage(error.message);
       }
     }
 
     boot();
+  }, []);
+
+  useEffect(() => {
+    unitsRef.current = units;
+  }, [units]);
+
+  useEffect(() => {
+    reorderModeRef.current = reorderMode;
+  }, [reorderMode]);
+
+  useEffect(() => {
+    return () => {
+      clearLongPress();
+      window.removeEventListener("pointermove", handleUnitPointerMove);
+      window.removeEventListener("pointerup", handleUnitPointerUp);
+      window.removeEventListener("pointercancel", handleUnitPointerUp);
+    };
   }, []);
 
   useEffect(() => {
@@ -98,17 +127,21 @@ export function App() {
       try {
         const payload = await api("/api/units");
         const timerPayload = await api("/api/unit-timers");
-        setUnits((currentUnits) =>
-          mergePolledUnits(
-            currentUnits,
-            payload.units,
-            desiredPatchesRef.current,
-            inFlightUnitsRef.current,
-            optimisticUntilRef.current,
-            Date.now()
-          )
-        );
+        const preferencePayload = await api("/api/unit-preferences");
+        if (!reorderModeRef.current) {
+          setUnits((currentUnits) =>
+            mergePolledUnits(
+              currentUnits,
+              payload.units,
+              desiredPatchesRef.current,
+              inFlightUnitsRef.current,
+              optimisticUntilRef.current,
+              Date.now()
+            )
+          );
+        }
         setUnitTimers(timerPayload.timers);
+        setUnitPreferences(preferencePayload.preferences);
         setMessage("");
       } catch (error) {
         setMessage(error.message);
@@ -153,6 +186,15 @@ export function App() {
     try {
       const payload = await api("/api/unit-timers");
       setUnitTimers(payload.timers);
+    } catch (error) {
+      setMessage(error.message);
+    }
+  }
+
+  async function loadUnitPreferences() {
+    try {
+      const payload = await api("/api/unit-preferences");
+      setUnitPreferences(payload.preferences);
     } catch (error) {
       setMessage(error.message);
     }
@@ -249,7 +291,7 @@ export function App() {
     }
   }
 
-  async function saveUnitTimer(unitIdx, action, localValue, presetMinutes = null) {
+  async function saveUnitTimer(unitIdx, action, localValue, presetMinutes = null, patch = undefined) {
     const runAt = new Date(localValue);
     if (Number.isNaN(runAt.getTime())) {
       setMessage("Timer time is invalid");
@@ -257,10 +299,12 @@ export function App() {
     }
 
     try {
+      const body = { runAt: runAt.toISOString(), presetMinutes };
+      if (patch) body.patch = patch;
       const payload = await api(`/api/units/${unitIdx}/timers/${action}`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ runAt: runAt.toISOString(), presetMinutes })
+        body: JSON.stringify(body)
       });
       setUnitTimers((currentTimers) => [
         ...currentTimers.filter((timer) => timer.unitIdx !== unitIdx || timer.action !== action),
@@ -269,6 +313,54 @@ export function App() {
       setMessage("");
     } catch (error) {
       setMessage(error.message);
+    }
+  }
+
+  async function updateUnitPreference(unitIdx, patch) {
+    const currentPreference = unitPreferencesByIdx.get(unitIdx) || {};
+    const nextPatch = { ...currentPreference, ...patch };
+    setUnitPreferences((currentPreferences) => upsertPreference(currentPreferences, unitIdx, nextPatch));
+
+    try {
+      const payload = await api(`/api/units/${unitIdx}/preferences`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(patch)
+      });
+      setUnitPreferences((currentPreferences) => upsertPreference(currentPreferences, unitIdx, payload.preference.patch));
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+      await loadUnitPreferences();
+    }
+  }
+
+  async function updateUnitTimerPatch(unitIdx, patch) {
+    const timer = unitTimers.find((item) => item.unitIdx === unitIdx && item.action === "on");
+    if (!timer) return;
+
+    const nextPatch = { ...(timer.patch || {}), ...patch, on: 1 };
+    setUnitTimers((currentTimers) =>
+      currentTimers.map((item) => (item.unitIdx === unitIdx && item.action === "on" ? { ...item, patch: nextPatch } : item))
+    );
+
+    try {
+      const payload = await api(`/api/units/${unitIdx}/timers/on`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          runAt: timer.runAt,
+          presetMinutes: timer.presetMinutes,
+          patch: nextPatch
+        })
+      });
+      setUnitTimers((currentTimers) =>
+        currentTimers.map((item) => (item.unitIdx === unitIdx && item.action === "on" ? payload.timer : item))
+      );
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+      await loadUnitTimers();
     }
   }
 
@@ -281,6 +373,105 @@ export function App() {
       setMessage("");
     } catch (error) {
       setMessage(error.message);
+    }
+  }
+
+  function handleUnitPointerDown(event, unitIdx) {
+    if (activeTab !== "home" || loadingUnits) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+
+    const startX = event.clientX;
+    const startY = event.clientY;
+
+    clearLongPress();
+    window.removeEventListener("pointerup", clearLongPress);
+    window.removeEventListener("pointercancel", clearLongPress);
+
+    if (reorderModeRef.current) {
+      event.preventDefault();
+      beginDrag(unitIdx);
+      return;
+    }
+
+    longPressRef.current = {
+      timerId: window.setTimeout(() => {
+        longPressRef.current = null;
+        setReorderMode(true);
+        beginDrag(unitIdx);
+      }, 520),
+      startX,
+      startY
+    };
+
+    window.addEventListener("pointerup", clearLongPress, { once: true });
+    window.addEventListener("pointercancel", clearLongPress, { once: true });
+  }
+
+  function handleUnitPointerMove(event) {
+    if (longPressRef.current && Math.hypot(event.clientX - longPressRef.current.startX, event.clientY - longPressRef.current.startY) > 10) {
+      clearLongPress();
+    }
+
+    const unitIdx = draggingIdxRef.current;
+    if (unitIdx === null) return;
+
+    event.preventDefault();
+    const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-unit-card-idx]");
+    const targetIdx = Number(target?.dataset?.unitCardIdx);
+    if (!Number.isInteger(targetIdx) || targetIdx === unitIdx) return;
+
+    setUnits((currentUnits) => {
+      const nextUnits = moveUnit(currentUnits, unitIdx, targetIdx);
+      unitsRef.current = nextUnits;
+      return nextUnits;
+    });
+    reorderDirtyRef.current = true;
+  }
+
+  function handleUnitPointerUp() {
+    clearLongPress();
+    if (draggingIdxRef.current === null) return;
+
+    draggingIdxRef.current = null;
+    setDraggingIdx(null);
+    window.removeEventListener("pointermove", handleUnitPointerMove);
+    window.removeEventListener("pointerup", handleUnitPointerUp);
+    window.removeEventListener("pointercancel", handleUnitPointerUp);
+
+    if (reorderDirtyRef.current) {
+      reorderDirtyRef.current = false;
+      void saveUnitOrder(unitsRef.current.map((unit) => unit.idx));
+    }
+  }
+
+  function beginDrag(unitIdx) {
+    draggingIdxRef.current = unitIdx;
+    reorderDirtyRef.current = false;
+    setDraggingIdx(unitIdx);
+    window.addEventListener("pointermove", handleUnitPointerMove, { passive: false });
+    window.addEventListener("pointerup", handleUnitPointerUp);
+    window.addEventListener("pointercancel", handleUnitPointerUp);
+  }
+
+  function clearLongPress() {
+    if (!longPressRef.current) return;
+    window.clearTimeout(longPressRef.current.timerId);
+    longPressRef.current = null;
+    window.removeEventListener("pointerup", clearLongPress);
+    window.removeEventListener("pointercancel", clearLongPress);
+  }
+
+  async function saveUnitOrder(order) {
+    try {
+      await api("/api/unit-order", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ order })
+      });
+      setMessage("");
+    } catch (error) {
+      setMessage(error.message);
+      await loadUnits({ hideContent: false });
     }
   }
 
@@ -297,11 +488,11 @@ export function App() {
           <button
             className="grid size-12 place-items-center rounded-full bg-white/12 text-slate-950 shadow-sm shadow-slate-900/5 backdrop-blur-xl transition hover:bg-white/20 focus:outline-none disabled:opacity-50 dark:bg-slate-950/42 dark:text-white dark:shadow-black/25 dark:hover:bg-slate-950/56"
             type="button"
-            onClick={() => loadUnits({ hideContent: false })}
+            onClick={() => (reorderMode ? setReorderMode(false) : loadUnits({ hideContent: false }))}
             disabled={loadingUnits}
-            aria-label="Refresh"
+            aria-label={reorderMode ? "Done sorting" : "Refresh"}
           >
-            <RefreshCw className={loadingUnits || syncingUnits > 0 ? "size-5 animate-spin" : "size-5"} />
+            {reorderMode ? <Check className="size-5" /> : <RefreshCw className={loadingUnits || syncingUnits > 0 ? "size-5 animate-spin" : "size-5"} />}
           </button>
         ) : null}
       </header>
@@ -313,7 +504,7 @@ export function App() {
       ) : null}
 
       <section
-        className={`grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4 ${activeTab === "home" ? "" : "hidden"}`}
+        className={`grid grid-cols-2 gap-3 pt-2 sm:grid-cols-3 lg:grid-cols-4 ${activeTab === "home" ? "" : "hidden"} ${reorderMode ? "touch-none" : ""}`}
         aria-live="polite"
         aria-busy={loadingUnits || syncingUnits > 0}
         aria-hidden={activeTab !== "home"}
@@ -325,7 +516,15 @@ export function App() {
           ) : null}
           {!loadingUnits
             ? units.map((unit) => (
-                <UnitCard key={unit.idx} unit={unit} timers={unitTimersByIdx.get(unit.idx) || []} onOpen={() => setSelectedIdx(unit.idx)} />
+                <UnitCard
+                  key={unit.idx}
+                  unit={unit}
+                  timers={unitTimersByIdx.get(unit.idx) || []}
+                  reorderMode={reorderMode}
+                  dragging={draggingIdx === unit.idx}
+                  onPointerDown={(event) => handleUnitPointerDown(event, unit.idx)}
+                  onOpen={() => setSelectedIdx(unit.idx)}
+                />
               ))
             : null}
       </section>
@@ -341,9 +540,12 @@ export function App() {
         busy={aliasBusy}
         onClose={() => setSelectedIdx(null)}
         onSaveAlias={saveAlias}
+        preference={selectedUnit ? unitPreferencesByIdx.get(selectedUnit.idx) || {} : {}}
         timers={selectedUnit ? unitTimersByIdx.get(selectedUnit.idx) || [] : []}
         onSaveTimer={saveUnitTimer}
         onDeleteTimer={deleteUnitTimer}
+        onUpdatePreference={updateUnitPreference}
+        onUpdateTimerPatch={updateUnitTimerPatch}
         onUpdate={updateSelected}
       />
 
@@ -409,4 +611,21 @@ function mergePolledUnits(currentUnits, polledUnits, desiredPatches, inFlightUni
 
     return currentUnitsByIdx.get(polledUnit.idx) || polledUnit;
   });
+}
+
+function upsertPreference(preferences, unitIdx, patch) {
+  const hasPreference = preferences.some((preference) => preference.unitIdx === unitIdx);
+  if (!hasPreference) return [...preferences, { unitIdx, patch }];
+  return preferences.map((preference) => (preference.unitIdx === unitIdx ? { unitIdx, patch } : preference));
+}
+
+function moveUnit(units, movingIdx, targetIdx) {
+  const fromIndex = units.findIndex((unit) => unit.idx === movingIdx);
+  const toIndex = units.findIndex((unit) => unit.idx === targetIdx);
+  if (fromIndex === -1 || toIndex === -1 || fromIndex === toIndex) return units;
+
+  const nextUnits = [...units];
+  const [movingUnit] = nextUnits.splice(fromIndex, 1);
+  nextUnits.splice(toIndex, 0, movingUnit);
+  return nextUnits;
 }

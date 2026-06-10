@@ -1,7 +1,8 @@
 export class UnitTimerRunner {
-  constructor({ store, client, intervalMs = 15_000, now = () => new Date() }) {
+  constructor({ store, client, preferences = null, intervalMs = 15_000, now = () => new Date() }) {
     this.store = store;
     this.client = client;
+    this.preferences = preferences;
     this.intervalMs = intervalMs;
     this.now = now;
     this.timer = null;
@@ -34,7 +35,9 @@ export class UnitTimerRunner {
         if (new Date(timer.runAt).getTime() > nowTime) continue;
 
         try {
-          await this.client.updateUnit(timer.unitIdx, { on: timer.action === "on" ? 1 : 0 });
+          const preferencePatch = timer.action === "on" && this.preferences ? await this.preferences.get(timer.unitIdx) : {};
+          const patch = timer.action === "on" ? { on: 1, ...(timer.patch || {}), ...preferencePatch } : { on: 0 };
+          await this.client.updateUnit(timer.unitIdx, patch);
           await this.store.delete(timer.unitIdx, timer.action);
         } catch (error) {
           console.error(`Unit timer "${timer.id}" failed: ${error.message}`);

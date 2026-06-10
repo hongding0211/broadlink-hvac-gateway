@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const validActions = new Set(["on", "off"]);
+const validModes = new Set([0, 1, 2, 3, 4, 5, 6, 8, 9, 10]);
+const validFans = new Set([0, 1, 2, 4, 6]);
 
 export class UnitTimerStore {
   constructor(dataDir = process.env.HVAC_DATA_DIR || path.join(root, ".data")) {
@@ -14,8 +16,8 @@ export class UnitTimerStore {
     return this.read();
   }
 
-  async set(unitIdx, action, runAt, presetMinutes) {
-    const timer = normalizeTimer({ unitIdx, action, runAt, presetMinutes });
+  async set(unitIdx, action, runAt, presetMinutes, patch) {
+    const timer = normalizeTimer({ unitIdx, action, runAt, presetMinutes, patch });
     const timers = await this.read();
     const nextTimers = timers.filter((item) => item.unitIdx !== timer.unitIdx || item.action !== timer.action);
     nextTimers.push(timer);
@@ -66,6 +68,10 @@ function normalizeTimer(input) {
     timer.presetMinutes = presetMinutes;
   }
 
+  if (action === "on") {
+    timer.patch = { on: 1, ...normalizeTimerPatch(input?.patch) };
+  }
+
   return timer;
 }
 
@@ -96,6 +102,45 @@ function normalizePresetMinutes(value) {
   }
 
   return presetMinutes;
+}
+
+function normalizeTimerPatch(value) {
+  if (value === undefined || value === null || value === "") return {};
+  if (typeof value !== "object" || Array.isArray(value)) throw statusError(400, "Timer patch is invalid");
+
+  const patch = {};
+
+  if (Object.hasOwn(value, "mode")) {
+    const mode = Number(value.mode);
+    if (!Number.isInteger(mode) || !validModes.has(mode)) throw statusError(400, "Timer mode is invalid");
+    patch.mode = mode;
+  }
+
+  if (Object.hasOwn(value, "fan")) {
+    const fan = Number(value.fan);
+    if (!Number.isInteger(fan) || !validFans.has(fan)) throw statusError(400, "Timer fan is invalid");
+    patch.fan = fan;
+  }
+
+  if (Object.hasOwn(value, "tempSet")) {
+    const tempSet = Number(value.tempSet);
+    if (!Number.isInteger(tempSet) || tempSet < 16 || tempSet > 32) throw statusError(400, "Timer temperature is invalid");
+    patch.tempSet = tempSet;
+  }
+
+  if (Object.hasOwn(value, "FlowDirection1")) {
+    const flowDirection1 = Number(value.FlowDirection1);
+    if (!Number.isInteger(flowDirection1) || flowDirection1 < 0 || flowDirection1 > 7) throw statusError(400, "Timer airflow is invalid");
+    patch.FlowDirection1 = flowDirection1;
+  }
+
+  if (Object.hasOwn(value, "FlowDirection2")) {
+    const flowDirection2 = Number(value.FlowDirection2);
+    if (!Number.isInteger(flowDirection2) || flowDirection2 < 0 || flowDirection2 > 6) throw statusError(400, "Timer airflow is invalid");
+    patch.FlowDirection2 = flowDirection2;
+  }
+
+  return patch;
 }
 
 function statusError(statusCode, message) {

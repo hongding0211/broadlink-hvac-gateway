@@ -7,6 +7,8 @@ import { AliasStore } from "../src/backend/aliasStore.js";
 import { AutomationRunner } from "../src/backend/automationRunner.js";
 import { AutomationStore } from "../src/backend/automationStore.js";
 import { buildControlCommand, normalizeUnit, parseDeviceJson } from "../src/backend/hvacClient.js";
+import { UnitOrderStore } from "../src/backend/unitOrderStore.js";
+import { UnitPreferenceStore } from "../src/backend/unitPreferenceStore.js";
 import { UnitTimerRunner } from "../src/backend/unitTimerRunner.js";
 import { UnitTimerStore } from "../src/backend/unitTimerStore.js";
 
@@ -254,7 +256,7 @@ test("stores one unit timer per action", async () => {
 
     await store.set(2, "off", "2026-06-08T02:00:00.000Z", 240);
     await store.set(2, "off", "2026-06-08T03:00:00.000Z", 240);
-    await store.set(2, "on", "2026-06-08T08:00:00.000Z");
+    await store.set(2, "on", "2026-06-08T08:00:00.000Z", null, { mode: 8, fan: 1, tempSet: 25 });
 
     const timers = await store.list();
     assert.equal(timers.length, 2);
@@ -267,12 +269,45 @@ test("stores one unit timer per action", async () => {
     );
     assert.equal(timers[0].presetMinutes, 240);
     assert.equal(timers[1].presetMinutes, undefined);
+    assert.deepEqual(timers[1].patch, { on: 1, mode: 8, fan: 1, tempSet: 25 });
 
     await store.delete(2, "off");
     assert.deepEqual(
       (await store.list()).map((timer) => timer.action),
       ["on"]
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("stores user unit preferences independently from timers", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-unit-preference-"));
+  try {
+    const store = new UnitPreferenceStore(dir);
+    await store.setPatch(2, { mode: 1, fan: 0, tempSet: 25 });
+    await store.setPatch(2, { fan: 2 });
+
+    assert.deepEqual(await store.get(2), { mode: 1, fan: 2, tempSet: 25 });
+    assert.deepEqual(await store.list(), [{ unitIdx: 2, patch: { mode: 1, fan: 2, tempSet: 25 } }]);
+    await assert.rejects(() => store.setPatch(2, { fan: 3 }), /fan/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("stores and applies user unit order", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-unit-order-"));
+  try {
+    const store = new UnitOrderStore(dir);
+    await store.set([3, 1, 3]);
+
+    assert.deepEqual(await store.get(), [3, 1]);
+    assert.deepEqual(
+      (await store.apply([{ idx: 0 }, { idx: 1 }, { idx: 2 }, { idx: 3 }])).map((unit) => unit.idx),
+      [3, 1, 0, 2]
+    );
+    await assert.rejects(() => store.set([1, -1]), /invalid/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -303,6 +338,35 @@ test("runs due unit timers and removes them", async () => {
       (await store.list()).map((timer) => [timer.unitIdx, timer.action]),
       [[4, "on"]]
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runs due on timers with scheduled state and user preference patch", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "hvac-unit-timer-runner-on-"));
+  try {
+    const updates = [];
+    const store = new UnitTimerStore(dir);
+    const preferences = new UnitPreferenceStore(dir);
+    await preferences.setPatch(4, { mode: 1, fan: 0, tempSet: 24 });
+    await store.set(4, "on", "2026-06-08T08:00:00.000Z", 30, { mode: 8, fan: 1, tempSet: 25 });
+
+    const runner = new UnitTimerRunner({
+      store,
+      preferences,
+      client: {
+        async updateUnit(idx, patch) {
+          updates.push({ idx, patch });
+        }
+      },
+      now: () => new Date("2026-06-08T08:00:10.000Z")
+    });
+
+    await runner.runDueTimers();
+
+    assert.deepEqual(updates, [{ idx: 4, patch: { on: 1, mode: 1, fan: 0, tempSet: 24 } }]);
+    assert.deepEqual(await store.list(), []);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
