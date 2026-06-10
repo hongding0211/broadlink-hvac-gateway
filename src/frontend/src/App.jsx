@@ -572,9 +572,9 @@ export function App() {
 function TabButton({ active, icon, label, onClick }) {
   return (
     <button
-      className={`flex min-w-0 items-center justify-center gap-2 rounded-full text-sm font-bold transition focus:outline-none ${
+      className={`flex min-w-0 items-center justify-center gap-2 rounded-full border border-transparent text-sm font-bold transition focus:outline-none ${
         active
-          ? "border border-white/35 bg-white/42 text-slate-950 shadow-sm shadow-slate-900/8 backdrop-blur-3xl dark:border-white/16 dark:bg-white/14 dark:text-white dark:shadow-black/20"
+          ? "bg-white/42 text-slate-950 shadow-sm shadow-slate-900/8 backdrop-blur-3xl dark:bg-white/14 dark:text-white dark:shadow-black/20"
           : "text-slate-700 hover:bg-white/22 dark:text-slate-200 dark:hover:bg-white/8"
       }`}
       type="button"
